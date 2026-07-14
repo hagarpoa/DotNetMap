@@ -65,6 +65,8 @@ dotnetmap serve-mcp --db .dotnetmap/index.db
 - Embeddings / TOON  
 - Cross-language support  
 
+Planned work: [BACKLOG.md](BACKLOG.md) (DNM-001+).
+
 ## Compatibility
 
 - .NET 10 SDK  

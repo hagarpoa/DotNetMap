@@ -25,6 +25,18 @@ public sealed class IndexOptions
     public bool LightDeps { get; init; } = true;
 
     /// <summary>
+    /// When false (default), method <c>calls</c> only store solution-local targets (DNM-007).
+    /// BCL / NuGet calls are omitted from the index.
+    /// </summary>
+    public bool IncludeExternalCalls { get; init; }
+
+    /// <summary>
+    /// When false (default), member signature type deps omit BCL/NuGet types (Task, etc.).
+    /// Structural type deps (inherits/implements) are always kept.
+    /// </summary>
+    public bool IncludeExternalSignatureDeps { get; init; }
+
+    /// <summary>
     /// When true, reuse unchanged projects from an existing index (project-level invalidation).
     /// Falls back to full index if DB missing, solution path/flags differ, or store cannot load.
     /// </summary>
@@ -32,6 +44,18 @@ public sealed class IndexOptions
 
     /// <summary>Existing map for --changed-only (loaded by CLI/store).</summary>
     public SolutionMap? PreviousMap { get; init; }
+
+    /// <summary>
+    /// Project name patterns to skip (substring or simple <c>*</c> glob). From config <c>excludeProjects</c>.
+    /// </summary>
+    public IReadOnlyList<string> ExcludeProjectPatterns { get; init; } = [];
+
+    /// <summary>Max outbound calls stored per method body (default 30).</summary>
+    public int MaxCallsPerMethod { get; init; } = 30;
+
+    /// <summary>Assembly names of projects in the solution (for external filtering).</summary>
+    public IReadOnlySet<string> SolutionAssemblyNames { get; init; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     public IndexMode Mode
     {
@@ -44,7 +68,7 @@ public sealed class IndexOptions
         }
     }
 
-    public string DotNetMapVersion { get; init; } = "0.2.0";
+    public string DotNetMapVersion { get; init; } = "0.3.0";
 
     public IProgress<string>? Progress { get; init; }
 

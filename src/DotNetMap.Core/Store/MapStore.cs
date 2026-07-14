@@ -51,6 +51,9 @@ public sealed class MapStore : IDisposable
         return store;
     }
 
+    /// <summary>Create a command on the open connection (for analysis queries).</summary>
+    public SqliteCommand CreateCommand() => _connection.CreateCommand();
+
     public void EnsureSchema()
     {
         var sql = SchemaLoader.LoadV0();
@@ -151,6 +154,33 @@ public sealed class MapStore : IDisposable
     public bool HasSolutionData() =>
         !string.IsNullOrEmpty(GetMeta("solution_path"));
 
+    /// <summary>Resolve on-disk absolute path for an indexed relative source path.</summary>
+    public string? ResolveFileAbsolutePath(string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+            return null;
+
+        var normalized = relativePath.Replace('\\', '/');
+        using (var cmd = _connection.CreateCommand())
+        {
+            cmd.CommandText = """
+                SELECT absolute_path FROM source_files
+                WHERE relative_path = $rel
+                   OR replace(relative_path, '\', '/') = $rel
+                LIMIT 1;
+                """;
+            cmd.Parameters.AddWithValue("$rel", normalized);
+            var hit = cmd.ExecuteScalar() as string;
+            if (!string.IsNullOrEmpty(hit) && File.Exists(hit))
+                return hit;
+        }
+
+        var solutionPath = GetMeta("solution_path");
+        var root = Source.SourceSnippetReader.ResolveSolutionRoot(solutionPath);
+        return Source.SourceSnippetReader.ResolveAbsolutePath(normalized, null, root);
+    }
+
+
     /// <summary>
     /// Loads solution/projects/types (no members) for scoped consumer updates.
     /// </summary>
@@ -191,7 +221,7 @@ public sealed class MapStore : IDisposable
             IncludePrivate = includePrivate,
             IncludeTest = includeTest,
             IndexedAtUtc = indexedAt,
-            DotNetMapVersion = GetMeta("dotnetmap_version") ?? "0.2.0"
+            DotNetMapVersion = GetMeta("dotnetmap_version") ?? "0.3.0"
         };
 
         using (var cmd = _connection.CreateCommand())
@@ -603,12 +633,47 @@ public sealed class MapStore : IDisposable
             LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$q", q);
-        cmd.Parameters.AddWithValue("$methodPrefixed",
-            q.StartsWith("method:", StringComparison.OrdinalIgnoreCase) ? q : "method:" + q);
+        // Prefer exact id for method:/property:/field:/event:
+        var prefixed = q switch
+        {
+            _ when q.StartsWith("method:", StringComparison.OrdinalIgnoreCase) => q,
+            _ when q.StartsWith("property:", StringComparison.OrdinalIgnoreCase) => q,
+            _ when q.StartsWith("field:", StringComparison.OrdinalIgnoreCase) => q,
+            _ when q.StartsWith("event:", StringComparison.OrdinalIgnoreCase) => q,
+            _ => "method:" + q
+        };
+        cmd.Parameters.AddWithValue("$methodPrefixed", prefixed);
         cmd.Parameters.AddWithValue("$like", "%" + q + "%");
 
         var list = ReadMemberDetails(cmd);
-        return list.Count > 0 ? list[0] : null;
+        if (list.Count > 0)
+            return list[0];
+
+        // Retry with property:/field: prefixes when bare name
+        if (!q.Contains(':', StringComparison.Ordinal))
+        {
+            foreach (var prefix in new[] { "property:", "field:", "event:" })
+            {
+                using var cmd2 = _connection.CreateCommand();
+                cmd2.CommandText = """
+                    SELECT m.id, m.name, m.kind, m.signature, m.accessibility, m.return_type, m.summary,
+                           m.start_line, m.end_line, m.size_chars, m.dependencies_json, m.consumers_json,
+                           m.token_estimate, f.relative_path, t.full_name
+                    FROM members m
+                    INNER JOIN types t ON t.id = m.type_id
+                    LEFT JOIN source_files f ON f.id = m.file_id
+                    WHERE m.id = $id OR (t.name || '.' || m.name) = $q OR (t.full_name || '.' || m.name) = $q
+                    ORDER BY t.full_name LIMIT 1;
+                    """;
+                cmd2.Parameters.AddWithValue("$id", prefix + q);
+                cmd2.Parameters.AddWithValue("$q", q);
+                var list2 = ReadMemberDetails(cmd2);
+                if (list2.Count > 0)
+                    return list2[0];
+            }
+        }
+
+        return null;
     }
 
     public void SaveMemberConsumers(string memberId, IReadOnlyList<RelationRef> consumers)
@@ -969,6 +1034,9 @@ public sealed class MapStore : IDisposable
         var result = cmd.ExecuteScalar();
         return result is long l ? (int)l : Convert.ToInt32(result);
     }
+
+    /// <summary>Public scalar COUNT helper for analysis modules.</summary>
+    public int ScalarCount(string sql) => ScalarInt(sql);
 
     private void Execute(string sql)
     {

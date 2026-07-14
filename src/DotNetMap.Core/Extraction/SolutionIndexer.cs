@@ -46,8 +46,11 @@ public sealed class SolutionIndexer
                 FullRelations = options.FullRelations,
                 RelationScopes = options.RelationScopes,
                 LightDeps = options.LightDeps,
+                IncludeExternalCalls = options.IncludeExternalCalls,
+                IncludeExternalSignatureDeps = options.IncludeExternalSignatureDeps,
                 ChangedOnly = false,
                 PreviousMap = null,
+                SolutionAssemblyNames = options.SolutionAssemblyNames,
                 DotNetMapVersion = options.DotNetMapVersion,
                 Progress = options.Progress
             };
@@ -56,6 +59,35 @@ public sealed class SolutionIndexer
         {
             options.Progress?.Report("incremental: project-level change detection enabled");
         }
+
+        // Assembly names for DNM-007 external call/dep filtering
+        var assemblyNames = solution.Projects
+            .Select(p => p.AssemblyName)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Cast<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Also project names (often match assembly)
+        foreach (var p in solution.Projects)
+            assemblyNames.Add(p.Name);
+
+        options = new IndexOptions
+        {
+            IncludePrivate = options.IncludePrivate,
+            IncludeTest = options.IncludeTest,
+            FullRelations = options.FullRelations,
+            RelationScopes = options.RelationScopes,
+            LightDeps = options.LightDeps,
+            IncludeExternalCalls = options.IncludeExternalCalls,
+            IncludeExternalSignatureDeps = options.IncludeExternalSignatureDeps,
+            ChangedOnly = options.ChangedOnly,
+            PreviousMap = options.PreviousMap,
+            SolutionAssemblyNames = assemblyNames,
+            DotNetMapVersion = options.DotNetMapVersion,
+            Progress = options.Progress
+        };
+
+        if (!options.IncludeExternalCalls)
+            options.Progress?.Report("calls: solution-local only (use --include-external-calls for BCL)");
 
         var extractor = new StructureExtractor(options);
         var (map, reused, reindexed, skippedTest) =

@@ -7,9 +7,11 @@ namespace DotNetMap.Core.Extraction;
 
 /// <summary>
 /// On-demand method callers via SymbolFinder (scoped — never full solution default).
+/// Returns one entry per call site with file + line (DNM-005).
 /// </summary>
 public sealed class MethodCallersExtractor
 {
+    /// <summary>Max reference sites returned (not unique callers).</summary>
     public const int MaxCallers = 50;
 
     public async Task<IReadOnlyList<RelationRef>> FindCallersAsync(
@@ -20,7 +22,9 @@ public sealed class MethodCallersExtractor
         var refs = await SymbolFinder.FindReferencesAsync(method, solution, cancellationToken)
             .ConfigureAwait(false);
 
-        var callers = new Dictionary<string, RelationRef>(StringComparer.Ordinal);
+        var solutionDir = GuessSolutionDir(solution);
+        var sites = new List<RelationRef>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var referenced in refs)
         {
@@ -45,18 +49,65 @@ public sealed class MethodCallersExtractor
 
                 var idName = caller.OriginalDefinition.ToDisplayString(MetadataFormat);
                 var id = Ids.Method(idName);
-                if (callers.ContainsKey(id))
+                var display = caller.ToDisplayString(DisplayFormat);
+
+                var lineSpan = location.Location.GetLineSpan();
+                var line = lineSpan.StartLinePosition.Line + 1;
+                var filePath = doc.FilePath;
+                var rel = ToRelative(solutionDir, filePath);
+
+                // Dedupe identical site
+                var siteKey = $"{id}|{rel}|{line}";
+                if (!seen.Add(siteKey))
                     continue;
 
-                var display = caller.ToDisplayString(DisplayFormat);
-                callers[id] = new RelationRef(RelationKind.ReferencedBy, id, display);
+                sites.Add(new RelationRef(
+                    RelationKind.ReferencedBy,
+                    id,
+                    display,
+                    File: rel,
+                    Line: line));
 
-                if (callers.Count >= MaxCallers)
-                    return callers.Values.OrderBy(c => c.TargetName, StringComparer.OrdinalIgnoreCase).ToList();
+                if (sites.Count >= MaxCallers)
+                    return OrderSites(sites);
             }
         }
 
-        return callers.Values.OrderBy(c => c.TargetName, StringComparer.OrdinalIgnoreCase).ToList();
+        return OrderSites(sites);
+    }
+
+    private static IReadOnlyList<RelationRef> OrderSites(List<RelationRef> sites) =>
+        sites
+            .OrderBy(s => s.TargetName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(s => s.File, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(s => s.Line)
+            .ToList();
+
+    private static string? GuessSolutionDir(Solution solution)
+    {
+        var path = solution.FilePath;
+        if (!string.IsNullOrEmpty(path))
+            return Path.GetDirectoryName(Path.GetFullPath(path));
+
+        var first = solution.Projects.Select(p => p.FilePath).FirstOrDefault(f => !string.IsNullOrEmpty(f));
+        return first is null ? null : Path.GetDirectoryName(Path.GetFullPath(first));
+    }
+
+    private static string? ToRelative(string? solutionDir, string? absolutePath)
+    {
+        if (string.IsNullOrEmpty(absolutePath))
+            return null;
+        try
+        {
+            if (!string.IsNullOrEmpty(solutionDir))
+                return Path.GetRelativePath(solutionDir, absolutePath).Replace('\\', '/');
+        }
+        catch
+        {
+            // fall through
+        }
+
+        return Path.GetFileName(absolutePath);
     }
 
     /// <summary>Find IMethodSymbol in the loaded solution matching a stored member id/name.</summary>
@@ -70,14 +121,7 @@ public sealed class MethodCallersExtractor
         if (shortName.StartsWith("method:", StringComparison.OrdinalIgnoreCase))
             shortName = shortName["method:".Length..];
 
-        // Type.Method form
         string? typeHint = parentTypeFullName;
-        var dot = shortName.LastIndexOf('.');
-        if (typeHint is null && dot > 0 && !shortName.Contains('(', StringComparison.Ordinal))
-        {
-            // might be Demo.App.OrderService.SaveAsync
-            // leave full string for display matching
-        }
 
         foreach (var project in solution.Projects.Where(p => p.Language == LanguageNames.CSharp))
         {
@@ -102,7 +146,6 @@ public sealed class MethodCallersExtractor
                 }
             }
 
-            // Scan by name
             var simple = shortName;
             if (simple.Contains('(', StringComparison.Ordinal))
                 simple = simple[..simple.IndexOf('(')];

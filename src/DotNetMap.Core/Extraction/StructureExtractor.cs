@@ -63,6 +63,13 @@ public sealed class StructureExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (Config.DotNetMapConfig.MatchesExclude(project.Name, _options.ExcludeProjectPatterns))
+            {
+                skippedTest++;
+                _options.Progress?.Report($"skip excluded project: {project.Name}");
+                continue;
+            }
+
             var isTest = Visibility.LooksLikeTestProject(project.Name, project.FilePath);
             if (isTest && !_options.IncludeTest)
             {
@@ -413,7 +420,7 @@ public sealed class StructureExtractor
         Span = span
     };
 
-    private static void AddTypeLightDeps(TypeNode typeNode, INamedTypeSymbol symbol)
+    private void AddTypeLightDeps(TypeNode typeNode, INamedTypeSymbol symbol)
     {
         if (symbol.BaseType is { SpecialType: not SpecialType.System_Object } baseType)
             AddDep(typeNode.Dependencies, RelationKind.Inherits, baseType);
@@ -429,7 +436,7 @@ public sealed class StructureExtractor
         }
     }
 
-    private static void AddMemberLightDeps(MemberNode node, ISymbol member)
+    private void AddMemberLightDeps(MemberNode node, ISymbol member)
     {
         switch (member)
         {
@@ -455,12 +462,10 @@ public sealed class StructureExtractor
         }
     }
 
-    private const int MaxCallsPerMethod = 30;
-
     /// <summary>
     /// Resolve invocations and object creations inside a method body (outbound calls).
     /// </summary>
-    private static void AddMethodCalls(
+    private void AddMethodCalls(
         MemberNode node,
         IMethodSymbol method,
         SyntaxNode declarationSyntax,
@@ -470,10 +475,11 @@ public sealed class StructureExtractor
         if (method.IsAbstract)
             return;
 
+        var maxCalls = _options.MaxCallsPerMethod > 0 ? _options.MaxCallsPerMethod : 30;
         var count = 0;
         foreach (var inv in declarationSyntax.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (count >= MaxCallsPerMethod)
+            if (count >= maxCalls)
                 break;
 
             var info = model.GetSymbolInfo(inv, cancellationToken);
@@ -485,14 +491,16 @@ public sealed class StructureExtractor
                 or MethodKind.EventAdd or MethodKind.EventRemove)
                 continue;
 
-            // Skip self-recursion noise optional — still useful, keep
+            if (!ExternalSymbolFilter.ShouldInclude(target, _options.SolutionAssemblyNames, _options.IncludeExternalCalls))
+                continue;
+
             AddCall(node.Dependencies, target);
             count++;
         }
 
         foreach (var create in declarationSyntax.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
-            if (count >= MaxCallsPerMethod)
+            if (count >= maxCalls)
                 break;
 
             var info = model.GetSymbolInfo(create, cancellationToken);
@@ -501,12 +509,15 @@ public sealed class StructureExtractor
             if (target is null)
                 continue;
 
+            if (!ExternalSymbolFilter.ShouldInclude(target, _options.SolutionAssemblyNames, _options.IncludeExternalCalls))
+                continue;
+
             AddCall(node.Dependencies, target);
             count++;
         }
     }
 
-    private static void AddCall(List<RelationRef> list, IMethodSymbol target)
+    private void AddCall(List<RelationRef> list, IMethodSymbol target)
     {
         var reduced = target.ReducedFrom ?? target;
         var idName = reduced.OriginalDefinition.ToDisplayString(MetadataFormat);
@@ -525,20 +536,11 @@ public sealed class StructureExtractor
         list.Add(new RelationRef(RelationKind.Calls, id, display));
     }
 
-    private static void AddDep(List<RelationRef> list, RelationKind kind, ITypeSymbol type)
+    private void AddDep(List<RelationRef> list, RelationKind kind, ITypeSymbol type)
     {
-        type = type is INamedTypeSymbol { IsGenericType: true, OriginalDefinition: var od }
-            ? type
-            : type;
-
         // Unwrap arrays / nullable
         while (type is IArrayTypeSymbol arr)
             type = arr.ElementType;
-
-        if (type is INamedTypeSymbol { ConstructedFrom: not null } nt && nt.IsGenericType)
-        {
-            // still record the constructed type
-        }
 
         if (type.SpecialType is SpecialType.System_Void
             or SpecialType.System_Object
@@ -557,6 +559,13 @@ public sealed class StructureExtractor
 
         if (type.TypeKind == Microsoft.CodeAnalysis.TypeKind.TypeParameter)
             return;
+
+        // Structural always kept; signature/member type deps respect external filter
+        if (kind is RelationKind.UsesInSignature or RelationKind.UsesInMember)
+        {
+            if (!ExternalSymbolFilter.ShouldInclude(type, _options.SolutionAssemblyNames, _options.IncludeExternalSignatureDeps))
+                return;
+        }
 
         var name = type.ToDisplayString(ShortFormat);
         var id = type is INamedTypeSymbol named

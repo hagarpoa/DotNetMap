@@ -66,7 +66,7 @@ public sealed class SolutionMap
     public bool IncludePrivate { get; init; }
     public bool IncludeTest { get; init; }
     public DateTimeOffset IndexedAtUtc { get; init; } = DateTimeOffset.UtcNow;
-    public string DotNetMapVersion { get; init; } = "0.2.0";
+    public string DotNetMapVersion { get; init; } = "0.3.0";
     public List<ProjectNode> Projects { get; init; } = [];
 }
 
