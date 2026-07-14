@@ -4,8 +4,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <Version>0.1.0</Version>
-    <Authors>NetMap</Authors>
+    <Version>0.2.0</Version>
+    <!-- Keep InformationalVersion as plain Version (no +git commit suffix) -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Authors>DotNetMap</Authors>
     <Description>Local semantic map of a .NET solution for AI context (CLI + MCP).</Description>
   </PropertyGroup>
 </Project>

@@ -1,6 +1,6 @@
-# NetMap: DemoSolution
+# DotNetMap: DemoSolution
 
-- Path: `C:\Users\Cesar\source\repos\NetMap\samples\DemoSolution\DemoSolution.slnx`
+- Path: `C:\Users\Cesar\source\repos\DotNetMap\samples\DemoSolution\DemoSolution.slnx`
 - Indexed (UTC): 2026-07-14 10:56:20Z
 - Mode: `structure+light-deps`
 - Projects: 2 | Types: 4 | Members: 12 | Files: 3

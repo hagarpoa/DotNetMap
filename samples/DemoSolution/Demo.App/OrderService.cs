@@ -14,7 +14,18 @@ public sealed class OrderService : IOrderService
     /// <inheritdoc />
     public Task<Guid> SaveAsync(Order order, CancellationToken cancellationToken = default)
     {
+        // Demo call edge for DotNetMap method graph (SaveAsync → CalculateTotal).
+        _ = CalculateTotal(order.Lines);
         // Demo only — no real persistence.
         return Task.FromResult(order.Id);
     }
+
+    public Task<Guid> SaveAsync2(Order order, CancellationToken cancellationToken = default)
+    {
+        // Demo call edge for DotNetMap method graph (SaveAsync → CalculateTotal).
+        _ = CalculateTotal(order.Lines);
+        // Demo only — no real persistence.
+        return Task.FromResult(order.Id);
+    }
+
 }

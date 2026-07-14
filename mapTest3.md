@@ -1,7 +1,7 @@
 # DotNetMap: DemoSolution
 
 - Path: `C:\Users\Cesar\source\repos\DotNetMap\samples\DemoSolution\DemoSolution.slnx`
-- Indexed (UTC): 2026-07-14 10:56:20Z
+- Indexed (UTC): 2026-07-14 11:49:57Z
 - Mode: `structure+light-deps`
 - Projects: 2 | Types: 4 | Members: 12 | Files: 3
 - Token estimate (overview): ~310

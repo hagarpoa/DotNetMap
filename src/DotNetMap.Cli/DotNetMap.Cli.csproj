@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DotNetMap.Cli</RootNamespace>
+    <AssemblyName>dotnetmap</AssemblyName>
+
+    <!-- dotnet tool -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnetmap</ToolCommandName>
+    <PackageId>DotNetMap.Tool</PackageId>
+    <PackageVersion>0.2.0</PackageVersion>
+    <Version>0.2.0</Version>
+    <Authors>Cesar Alano</Authors>
+    <Description>Local AI-token-aware semantic map of a .NET solution (CLI + MCP).</Description>
+    <PackageTags>dotnetmap;roslyn;mcp;dotnet;code-map;ai</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/hagarpoa/DotNetMap</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/hagarpoa/DotNetMap</PackageProjectUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DotNetMap.Core\DotNetMap.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
+    <PackageReference Include="System.CommandLine" Version="2.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

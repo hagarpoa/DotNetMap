@@ -1,4 +1,4 @@
--- NetMap SQLite schema v0
+-- DotNetMap SQLite schema v0
 -- Local-first index for AI context. Relations stored as JSON in MVP.
 -- Apply on empty database. schema_version in meta must be 0.
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS meta (
 --   index_mode              = 'structure' | 'structure+light-deps' | 'full-relations'
 --   include_private         = '0' | '1'
 --   include_test            = '0' | '1'
---   netmap_version          = tool semver
+--   dotnetmap_version          = tool semver
 --   token_estimate_overview = integer as text
 
 -- ---------------------------------------------------------------------------

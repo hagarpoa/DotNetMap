@@ -9,8 +9,8 @@ obj/
 *.userosscache
 *.sln.docstates
 
-## NetMap local index
-.netmap/
+## DotNetMap local index
+.dotnetmap/
 *.db
 *.db-wal
 *.db-shm

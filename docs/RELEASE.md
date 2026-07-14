@@ -1,4 +1,4 @@
-# NetMap 0.1.0 — Release notes
+# DotNetMap 0.2.0 — Release notes
 
 ## What it is
 
@@ -12,35 +12,35 @@ Local-first, AI-token-aware semantic map of a .NET solution:
 
 ```powershell
 cd C:\Users\Cesar\source\repos\NetMap
-dotnet pack src/NetMap.Cli/NetMap.Cli.csproj -c Release -o artifacts
-dotnet tool uninstall -g NetMap.Tool  # if reinstalling
-dotnet tool install -g NetMap.Tool --add-source artifacts --version 0.1.0
-netmap --help
+dotnet pack src/DotNetMap.Cli/DotNetMap.Cli.csproj -c Release -o artifacts
+dotnet tool uninstall -g DotNetMap.Tool  # if reinstalling
+dotnet tool install -g DotNetMap.Tool --add-source artifacts --version 0.2.0
+dotnetmap --help
 ```
 
 Or run without installing:
 
 ```powershell
-dotnet run --project src/NetMap.Cli -- --help
+dotnet run --project src/DotNetMap.Cli -- --help
 ```
 
 ## Quickstart
 
 ```powershell
-netmap index path/to/solution.slnx --db .netmap/index.db
-netmap status --db .netmap/index.db
-netmap query OrderService --db .netmap/index.db
-netmap get OrderService --db .netmap/index.db
-netmap export --members --out map.md --db .netmap/index.db
+dotnetmap index path/to/solution.slnx --db .dotnetmap/index.db
+dotnetmap status --db .dotnetmap/index.db
+dotnetmap query OrderService --db .dotnetmap/index.db
+dotnetmap get OrderService --db .dotnetmap/index.db
+dotnetmap export --members --out map.md --db .dotnetmap/index.db
 
 # Incremental (project-level)
-netmap index path/to/solution.slnx --db .netmap/index.db --changed-only
+dotnetmap index path/to/solution.slnx --db .dotnetmap/index.db --changed-only
 
 # Scoped consumers (SymbolFinder)
-netmap consumers type:IOrderService --db .netmap/index.db
+dotnetmap consumers type:IOrderService --db .dotnetmap/index.db
 
 # MCP stdio
-netmap serve-mcp --db .netmap/index.db
+dotnetmap serve-mcp --db .dotnetmap/index.db
 ```
 
 ## Incremental semantics
@@ -50,9 +50,17 @@ netmap serve-mcp --db .netmap/index.db
 - Requires same solution path and same `--include-private` / `--include-test` flags.  
 - Default index is **full**; pass `--changed-only` for reuse.  
 
-## Not in 0.1.0
+## Included in 0.2.0 (product name DotNetMap)
 
-- Method-level incremental  
+- Method lines / lineCount / file  
+- Outbound method **calls** on index  
+- On-demand **callers** (`dotnetmap callers`)  
+- Incremental project-level reindex  
+- MCP tools including `get_method`  
+
+## Not in 0.2.0
+
+- Method-level incremental (file/project only)  
 - Materialized full call graph by default  
 - Embeddings / TOON  
 - Cross-language support  

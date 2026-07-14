@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DotNetMap.Cli/DotNetMap.Cli.csproj" />
+    <Project Path="src/DotNetMap.Core/DotNetMap.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotNetMap.Tests/DotNetMap.Tests.csproj" />
+  </Folder>
+</Solution>

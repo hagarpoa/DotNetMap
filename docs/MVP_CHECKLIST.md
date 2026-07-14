@@ -1,4 +1,4 @@
-# NetMap — Checklist MVP (issues / PRs)
+# DotNetMap — Checklist MVP (issues / PRs)
 
 Ordem recomendada de entrega. Cada item = PR focada, mergeável isoladamente.
 
@@ -8,8 +8,8 @@ Estimativa total: **13–16 dias** (buffer realista). Target original 10–13 s�
 
 ## PR-0 — Setup & contratos (0.5 d) ✅
 
-- [x] Solution `NetMap.slnx` (.NET 10)
-- [x] Projetos `NetMap.Core`, `NetMap.Cli`, `NetMap.Tests`
+- [x] Solution `DotNetMap.slnx` (.NET 10)
+- [x] Projetos `DotNetMap.Core`, `DotNetMap.Cli`, `DotNetMap.Tests`
 - [x] Sample `samples/DemoSolution` (Order / IOrderService / OrderService)
 - [x] Docs: decisões, schema, este checklist
 - [x] `Directory.Build.props` (nullable, version)
@@ -46,7 +46,7 @@ Estimativa total: **13–16 dias** (buffer realista). Target original 10–13 s�
 - [x] Teste de integração no `DemoSolution`
 - [x] Export MD/JSON com lista de types
 
-**Done when:** `netmap index samples/DemoSolution` gera DB com types/methods esperados. ✅
+**Done when:** `dotnetmap index samples/DemoSolution` gera DB com types/methods esperados. ✅
 
 ---
 
@@ -86,7 +86,7 @@ Estimativa total: **13–16 dias** (buffer realista). Target original 10–13 s�
 - [x] Prompts: `architecture_review`, `impact_analysis`
 - [x] Descrições de tools com exemplos
 
-**Done when:** `netmap serve-mcp` sobe e tools leem o SQLite. ✅
+**Done when:** `dotnetmap serve-mcp` sobe e tools leem o SQLite. ✅
 
 ---
 
@@ -94,11 +94,21 @@ Estimativa total: **13–16 dias** (buffer realista). Target original 10–13 s�
 
 - [x] Hash SHA-256 por arquivo; fingerprint por projeto
 - [x] `--changed-only` (project-level) + `--force`
-- [x] Pack como `dotnet tool` (`NetMap.Tool` → comando `netmap`)
+- [x] Pack como `dotnet tool` (`DotNetMap.Tool` → comando `dotnetmap`)
 - [x] README + `docs/RELEASE.md`
 - [x] Smoke: sample full cycle + second pass reuses projects
 
 **Done when:** segunda indexação de solution intacta reutiliza projetos; tool packável. ✅
+
+---
+
+## Pós-MVP — Method graph (v0.2 slice) ✅
+
+- [x] Expor `lineStart` / `lineEnd` / `lineCount` (+ file) em members
+- [x] Outbound **calls** na extração estrutural → `dependencies_json` (`kind: calls`)
+- [x] CLI `get` resolve type **ou** method; `callers` on-demand (SymbolFinder)
+- [x] MCP `get_method`
+- [x] Sample `SaveAsync` → `CalculateTotal` para validação
 
 ---
 

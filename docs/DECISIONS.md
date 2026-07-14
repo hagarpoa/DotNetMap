@@ -1,8 +1,8 @@
-# NetMap — Decisões técnicas (MVP)
+# DotNetMap — Decisões técnicas (MVP)
 
 ## Posicionamento
 
-> **NetMap** = índice local, auditável e *AI-token-aware* de uma solution .NET, com posição/tamanho/sumário e consulta MCP, **sem** exigir grafo completo de referências.
+> **DotNetMap** = índice local, auditável e *AI-token-aware* de uma solution .NET, com posição/tamanho/sumário e consulta MCP, **sem** exigir grafo completo de referências.
 
 Não é call-graph universal. Não é IDE. É mapa de contexto para agentes.
 
@@ -17,7 +17,7 @@ Não é call-graph universal. Não é IDE. É mapa de contexto para agentes.
 | Persistência | SQLite + FTS5 | Local-first, zero servidor, busca textual |
 | CLI | System.CommandLine | Padrão Microsoft 2026 |
 | MCP | Model Context Protocol SDK (Fase 5) | Tools/Resources/Prompts oficiais |
-| Empacotamento | `dotnet tool` único `netmap` | Um binário, vários subcomandos |
+| Empacotamento | `dotnet tool` único `dotnetmap` | Um binário, vários subcomandos |
 
 ---
 
@@ -124,9 +124,9 @@ Limites default de tools MCP:
 ## Packaging CLI
 
 ```text
-netmap index <path> [--db .netmap/index.db] [--full-relations] [--include-private] [--include-test]
-netmap status [--db ...]
-netmap query <text> [--db ...]
-netmap export [--format md|json] [--out map.md]
-netmap serve-mcp [--db ...]   # Fase 5
+dotnetmap index <path> [--db .dotnetmap/index.db] [--full-relations] [--include-private] [--include-test]
+dotnetmap status [--db ...]
+dotnetmap query <text> [--db ...]
+dotnetmap export [--format md|json] [--out map.md]
+dotnetmap serve-mcp [--db ...]   # Fase 5
 ```
