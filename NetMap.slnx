@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NetMap.Cli/NetMap.Cli.csproj" />
+    <Project Path="src/NetMap.Core/NetMap.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NetMap.Tests/NetMap.Tests.csproj" />
+  </Folder>
+</Solution>

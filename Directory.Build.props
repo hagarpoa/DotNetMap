@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Version>0.1.0</Version>
+    <Authors>NetMap</Authors>
+    <Description>Local semantic map of a .NET solution for AI context (CLI + MCP).</Description>
+  </PropertyGroup>
+</Project>
