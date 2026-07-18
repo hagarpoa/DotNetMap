@@ -2,7 +2,7 @@
 
 **Estado base:** v0.3.0  
 **Objetivo do produto:** índice local, AI-token-aware, de solutions .NET para agentes (refatoração, impacto, navegação).  
-**Última revisão:** 2026-07-18  
+**Última revisão:** 2026-07-18 (DNM-014 edges / schema v1)  
 
 ---
 
@@ -262,7 +262,7 @@
 
 ---
 
-### DNM-014 — Tabela normalizada de relações (schema v1)
+### DNM-014 — Tabela normalizada de relações (schema v1) ✅ (0.3.3)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -270,9 +270,14 @@
 | **Esforço** | L |
 | **Depende** | — |
 
-**Problema:** JSON de relações limita queries e grafos.  
-**Solução:** tabelas `edges(from_id, to_id, kind, file, line)`; migração `schema_version=1`; manter JSON como cache de export se útil.  
-**Done when:** query SQL de grafo 2 hops; reindex migra ou rebuild documentado.
+- [x] Tabela `edges(from_id, to_id, kind, file, line)` + índices
+- [x] `WriteMap` materializa edges; JSON permanece como cache de export
+- [x] `schema_version=1`; migração automática JSON→edges ao abrir DB v0
+- [x] `GetOutboundEdges` / `GetInboundEdges` / `QueryGraphHops` (2 hops)
+- [x] `ImpactGraph` hops profundos usam tabela edges quando disponível
+- [x] Testes `EdgesTests`
+
+**Done when:** query SQL de grafo 2 hops; reindex migra ou rebuild documentado. ✅
 
 ---
 
@@ -293,7 +298,7 @@
 
 ---
 
-### DNM-016 — Partials: merge completo de declarações
+### DNM-016 — Partials: merge completo de declarações ✅ (0.3.3)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -301,9 +306,12 @@
 | **Esforço** | M |
 | **Depende** | — |
 
-**Problema:** type/member em múltiplos arquivos; span “primário” só.  
-**Solução:** listar todas as partial locations; members por arquivo.  
-**Done when:** type partial com 2 files aparece com `locations[]`.
+- [x] `DeclarationLocation` + `TypeNode.Locations` / `locations_json`
+- [x] `StructureExtractor` acumula sites de cada partial; members por arquivo
+- [x] `get` / export MD+JSON com `locations[]` (partials)
+- [x] Sample: `Order` + `Order.Pricing.cs`; testes `PartialsTests`
+
+**Done when:** type partial com 2 files aparece com `locations[]`. ✅
 
 ---
 
@@ -557,7 +565,7 @@
 
 ---
 
-### DNM-035 — Schema versioning policy + migrations
+### DNM-035 — Schema versioning policy + migrations ✅ parcial (0.3.3)
 | | |
 |--|--|
 | **Pri** | P1 |
@@ -565,7 +573,10 @@
 | **Esforço** | M |
 | **Depende** | DNM-014 se v1 |
 
-**Done when:** abrir db antigo com tool nova falha com “reindex required” ou migra.
+- [x] `schema_version=1` no write; migração v0→edges (JSON backfill)
+- [ ] Política formal de breaking changes / mensagem “reindex required” para v2+
+
+**Done when:** abrir db antigo com tool nova falha com “reindex required” ou migra. (migra ✅)
 
 ---
 

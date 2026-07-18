@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS types (
     dependencies_json TEXT NOT NULL DEFAULT '[]',
     consumers_json    TEXT NOT NULL DEFAULT '[]', -- only when Phase B ran for this type
     token_estimate    INTEGER NOT NULL DEFAULT 0,
+    -- Partial declaration sites (DNM-016); primary also in file_id/start_line
+    locations_json  TEXT NOT NULL DEFAULT '[]',
     UNIQUE (project_id, full_name)
 );
 
@@ -153,3 +155,23 @@ CREATE VIRTUAL TABLE IF NOT EXISTS body_fts USING fts5(
     content,
     tokenize = 'porter unicode61'
 );
+
+-- ---------------------------------------------------------------------------
+-- Normalized relations (DNM-014 / schema_version >= 1).
+-- JSON on types/members remains the export cache; edges enable multi-hop SQL.
+-- kind: inherits|implements|usesInSignature|usesInMember|calls|referencedBy
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS edges (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id   TEXT NOT NULL,
+    to_id     TEXT NOT NULL,
+    kind      TEXT NOT NULL,
+    file      TEXT NULL,
+    line      INTEGER NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_edges_from ON edges(from_id);
+CREATE INDEX IF NOT EXISTS ix_edges_to ON edges(to_id);
+CREATE INDEX IF NOT EXISTS ix_edges_kind ON edges(kind);
+CREATE INDEX IF NOT EXISTS ix_edges_from_kind ON edges(from_id, kind);
+CREATE INDEX IF NOT EXISTS ix_edges_to_kind ON edges(to_id, kind);

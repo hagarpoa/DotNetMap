@@ -54,6 +54,9 @@ public sealed class MapStore : IDisposable
     /// <summary>Create a command on the open connection (for analysis queries).</summary>
     public SqliteCommand CreateCommand() => _connection.CreateCommand();
 
+    /// <summary>Current on-write schema (DNM-014 edges table).</summary>
+    public const int CurrentSchemaVersion = 1;
+
     public void EnsureSchema()
     {
         var sql = SchemaLoader.LoadV0();
@@ -63,6 +66,42 @@ public sealed class MapStore : IDisposable
 
         if (GetMeta("schema_version") is null)
             SetMeta("schema_version", "0");
+
+        // Additive columns for older DBs (CREATE TABLE IF NOT EXISTS does not alter).
+        EnsureColumn("types", "locations_json", "TEXT NOT NULL DEFAULT '[]'");
+
+        // Old DBs: materialize edges from JSON once (no full reindex required).
+        TryMigrateEdgesFromJson();
+    }
+
+    private void EnsureColumn(string table, string column, string columnDef)
+    {
+        try
+        {
+            using var check = _connection.CreateCommand();
+            check.CommandText = $"PRAGMA table_info({table});";
+            using var reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+        }
+        catch (SqliteException)
+        {
+            return;
+        }
+
+        try
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {columnDef};";
+            alter.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // race / unsupported
+        }
     }
 
     public void WriteMap(SolutionMap map)
@@ -73,6 +112,7 @@ public sealed class MapStore : IDisposable
 
         // Full rewrite for MVP simplicity (incremental reindex per project comes in PR-6).
         Execute("""
+            DELETE FROM edges;
             DELETE FROM body_fts;
             DELETE FROM members_fts;
             DELETE FROM types_fts;
@@ -87,6 +127,7 @@ public sealed class MapStore : IDisposable
         InsertSolution(map);
 
         var bodyFiles = 0;
+        var edgeCount = 0;
         foreach (var project in map.Projects)
         {
             InsertProject(map.Id, project);
@@ -102,15 +143,17 @@ public sealed class MapStore : IDisposable
             {
                 TokenEstimator.EstimateType(type);
                 InsertType(project.Id, type);
+                edgeCount += InsertRelationEdges(type.Id, type.Dependencies, type.Consumers);
                 foreach (var member in type.Members)
                 {
                     TokenEstimator.EstimateMember(member);
                     InsertMember(type.Id, type.FullName, member);
+                    edgeCount += InsertRelationEdges(member.Id, member.Dependencies, member.Consumers);
                 }
             }
         }
 
-        SetMeta("schema_version", "0");
+        SetMeta("schema_version", CurrentSchemaVersion.ToString());
         SetMeta("solution_path", map.Path);
         SetMeta("solution_name", map.Name);
         SetMeta("indexed_at_utc", map.IndexedAtUtc.UtcDateTime.ToString("o"));
@@ -119,6 +162,7 @@ public sealed class MapStore : IDisposable
         SetMeta("include_test", map.IncludeTest ? "1" : "0");
         SetMeta("index_body", map.IndexBody ? "1" : "0");
         SetMeta("body_file_count", bodyFiles.ToString());
+        SetMeta("edge_count", edgeCount.ToString());
         SetMeta("dotnetmap_version", map.DotNetMapVersion);
         SetMeta("token_estimate_overview", TokenEstimator.EstimateOverview(map).ToString());
 
@@ -145,6 +189,12 @@ public sealed class MapStore : IDisposable
 
         var bodyFiles = 0;
         _ = int.TryParse(GetMeta("body_file_count"), out bodyFiles);
+        var edgeCount = 0;
+        if (!int.TryParse(GetMeta("edge_count"), out edgeCount))
+        {
+            try { edgeCount = ScalarInt("SELECT COUNT(*) FROM edges"); }
+            catch (SqliteException) { edgeCount = 0; }
+        }
 
         return new IndexStatus
         {
@@ -157,6 +207,7 @@ public sealed class MapStore : IDisposable
             IncludeTest = GetMeta("include_test") == "1",
             IndexBody = GetMeta("index_body") == "1",
             BodyFileCount = bodyFiles,
+            EdgeCount = edgeCount,
             DotNetMapVersion = GetMeta("dotnetmap_version"),
             ProjectCount = ScalarInt("SELECT COUNT(*) FROM projects"),
             TypeCount = ScalarInt("SELECT COUNT(*) FROM types"),
@@ -165,6 +216,91 @@ public sealed class MapStore : IDisposable
             DatabaseBytes = dbBytes,
             TokenEstimateOverview = tokenEst
         };
+    }
+
+    /// <summary>Whether the normalized edges table has rows (DNM-014).</summary>
+    public bool HasEdges()
+    {
+        try
+        {
+            return ScalarInt("SELECT COUNT(*) FROM edges") > 0;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Outbound edges from <paramref name="fromId"/> (dependencies / calls).
+    /// </summary>
+    public IReadOnlyList<EdgeRow> GetOutboundEdges(string fromId, int max = 100)
+    {
+        max = Math.Clamp(max, 1, 500);
+        return QueryEdges(
+            "SELECT from_id, to_id, kind, file, line FROM edges WHERE from_id = $id LIMIT $max",
+            fromId, max);
+    }
+
+    /// <summary>
+    /// Inbound edges to <paramref name="toId"/> (consumers / callers as from→to).
+    /// </summary>
+    public IReadOnlyList<EdgeRow> GetInboundEdges(string toId, int max = 100)
+    {
+        max = Math.Clamp(max, 1, 500);
+        return QueryEdges(
+            "SELECT from_id, to_id, kind, file, line FROM edges WHERE to_id = $id LIMIT $max",
+            toId, max);
+    }
+
+    /// <summary>
+    /// SQL multi-hop walk (1..depth) over <c>edges</c>. Depth 2 = classic 2-hop graph query.
+    /// Outbound follows from→to; inbound reverses (treats to as start).
+    /// </summary>
+    public IReadOnlyList<GraphHop> QueryGraphHops(
+        string rootId,
+        int depth = 2,
+        bool outbound = true,
+        int max = 80)
+    {
+        depth = Math.Clamp(depth, 1, 4);
+        max = Math.Clamp(max, 1, 200);
+
+        var hops = new List<GraphHop>();
+        var frontier = new List<string> { rootId };
+        var seen = new HashSet<string>(StringComparer.Ordinal) { rootId };
+
+        for (var d = 1; d <= depth && hops.Count < max; d++)
+        {
+            var next = new List<string>();
+            foreach (var node in frontier)
+            {
+                if (hops.Count >= max)
+                    break;
+
+                var edges = outbound
+                    ? GetOutboundEdges(node, max: max)
+                    : GetInboundEdges(node, max: max);
+
+                foreach (var e in edges)
+                {
+                    var neighbor = outbound ? e.ToId : e.FromId;
+                    if (!seen.Add(neighbor))
+                        continue;
+
+                    hops.Add(new GraphHop(neighbor, node, e.Kind, d, e.File, e.Line));
+                    next.Add(neighbor);
+                    if (hops.Count >= max)
+                        break;
+                }
+            }
+
+            frontier = next;
+            if (frontier.Count == 0)
+                break;
+        }
+
+        return hops;
     }
 
     public bool HasSolutionData() =>
@@ -302,7 +438,8 @@ public sealed class MapStore : IDisposable
                 SELECT id, namespace_id, name, full_name, kind, accessibility,
                        is_static, is_abstract, is_sealed, summary,
                        file_id, start_line, end_line, start_offset, end_offset, size_chars,
-                       dependencies_json, consumers_json, token_estimate
+                       dependencies_json, consumers_json, token_estimate,
+                       locations_json
                 FROM types
                 WHERE project_id = $pid
                 ORDER BY full_name;
@@ -313,6 +450,13 @@ public sealed class MapStore : IDisposable
             {
                 var kindStr = reader.GetString(4);
                 var kind = Enum.TryParse<TypeKind>(kindStr, ignoreCase: true, out var k) ? k : TypeKind.Class;
+                var span = new SourceSpan(
+                    reader.IsDBNull(10) ? null : reader.GetString(10),
+                    reader.IsDBNull(11) ? null : reader.GetInt32(11),
+                    reader.IsDBNull(12) ? null : reader.GetInt32(12),
+                    reader.IsDBNull(13) ? null : reader.GetInt32(13),
+                    reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                    reader.GetInt32(15));
                 var type = new TypeNode
                 {
                     Id = reader.GetString(0),
@@ -325,18 +469,15 @@ public sealed class MapStore : IDisposable
                     IsAbstract = reader.GetInt32(7) != 0,
                     IsSealed = reader.GetInt32(8) != 0,
                     Summary = reader.IsDBNull(9) ? null : reader.GetString(9),
-                    Span = new SourceSpan(
-                        reader.IsDBNull(10) ? null : reader.GetString(10),
-                        reader.IsDBNull(11) ? null : reader.GetInt32(11),
-                        reader.IsDBNull(12) ? null : reader.GetInt32(12),
-                        reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                        reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                        reader.GetInt32(15)),
+                    Span = span,
                     TokenEstimate = reader.GetInt32(18)
                 };
 
                 TryLoadRelations(reader.IsDBNull(16) ? "[]" : reader.GetString(16), type.Dependencies);
                 TryLoadRelations(reader.IsDBNull(17) ? "[]" : reader.GetString(17), type.Consumers);
+                type.Locations.AddRange(ParseLocations(
+                    reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetString(19) : "[]",
+                    span));
 
                 if (includeMembers)
                     LoadMembers(type);
@@ -418,6 +559,11 @@ public sealed class MapStore : IDisposable
             cmd.Parameters.AddWithValue("$id", type.Id);
             cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(type.Consumers, JsonOptions));
             cmd.ExecuteNonQuery();
+
+            // Replace inbound consumer edges for this type (DNM-014)
+            DeleteEdgesForOwner(type.Id, consumersOnly: true);
+            foreach (var c in type.Consumers)
+                InsertEdge(c.TargetId, type.Id, KindToEdgeString(c.Kind), c.File, c.Line);
         }
 
         if (mode is not null)
@@ -425,6 +571,8 @@ public sealed class MapStore : IDisposable
                 : mode == IndexMode.Structure ? "structure" : "structure+light-deps");
 
         SetMeta("indexed_at_utc", DateTimeOffset.UtcNow.UtcDateTime.ToString("o"));
+        SetMeta("schema_version", CurrentSchemaVersion.ToString());
+        RefreshEdgeCountMeta();
         tx.Commit();
     }
 
@@ -540,7 +688,7 @@ public sealed class MapStore : IDisposable
             SELECT t.id, t.full_name, t.kind, t.accessibility, t.summary,
                    t.start_line, t.end_line, t.size_chars,
                    t.dependencies_json, t.consumers_json, t.token_estimate,
-                   f.relative_path
+                   f.relative_path, t.locations_json, t.file_id
             FROM types t
             LEFT JOIN source_files f ON f.id = t.file_id
             WHERE t.full_name = $q
@@ -572,6 +720,8 @@ public sealed class MapStore : IDisposable
         string consJson;
         int tokenEstimate;
         string? relativePath;
+        string locationsJson;
+        string? fileId;
 
         using (var reader = cmd.ExecuteReader())
         {
@@ -590,7 +740,12 @@ public sealed class MapStore : IDisposable
             consJson = reader.GetString(9);
             tokenEstimate = reader.GetInt32(10);
             relativePath = reader.IsDBNull(11) ? null : reader.GetString(11);
+            locationsJson = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : "[]";
+            fileId = reader.FieldCount > 13 && !reader.IsDBNull(13) ? reader.GetString(13) : null;
         }
+
+        var span = new SourceSpan(fileId, startLine, endLine, null, null, sizeChars);
+        var locations = ParseLocations(locationsJson, span, relativePath);
 
         return new TypeDetail(
             typeId,
@@ -605,7 +760,8 @@ public sealed class MapStore : IDisposable
             depsJson,
             consJson,
             tokenEstimate,
-            ListMemberDetails(typeId, maxMembers));
+            ListMemberDetails(typeId, maxMembers),
+            locations);
     }
 
     private IReadOnlyList<MemberDetail> ListMemberDetails(string typeId, int max)
@@ -713,16 +869,27 @@ public sealed class MapStore : IDisposable
 
     public void SaveMemberConsumers(string memberId, IReadOnlyList<RelationRef> consumers)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            UPDATE members
-            SET consumers_json = $json
-            WHERE id = $id;
-            """;
-        cmd.Parameters.AddWithValue("$id", memberId);
-        cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(consumers, JsonOptions));
-        cmd.ExecuteNonQuery();
+        using var tx = _connection.BeginTransaction();
+        using (var cmd = _connection.CreateCommand())
+        {
+            cmd.CommandText = """
+                UPDATE members
+                SET consumers_json = $json
+                WHERE id = $id;
+                """;
+            cmd.Parameters.AddWithValue("$id", memberId);
+            cmd.Parameters.AddWithValue("$json", JsonSerializer.Serialize(consumers, JsonOptions));
+            cmd.ExecuteNonQuery();
+        }
+
+        DeleteEdgesForOwner(memberId, consumersOnly: true);
+        foreach (var c in consumers)
+            InsertEdge(c.TargetId, memberId, KindToEdgeString(c.Kind), c.File, c.Line);
+
         SetMeta("indexed_at_utc", DateTimeOffset.UtcNow.UtcDateTime.ToString("o"));
+        SetMeta("schema_version", CurrentSchemaVersion.ToString());
+        RefreshEdgeCountMeta();
+        tx.Commit();
     }
 
     private static List<MemberDetail> ReadMemberDetails(SqliteCommand cmd)
@@ -1031,12 +1198,12 @@ public sealed class MapStore : IDisposable
                 id, project_id, namespace_id, name, full_name, kind, accessibility,
                 is_static, is_abstract, is_sealed, summary,
                 file_id, start_line, end_line, start_offset, end_offset, size_chars,
-                dependencies_json, consumers_json, token_estimate)
+                dependencies_json, consumers_json, token_estimate, locations_json)
             VALUES (
                 $id, $pid, $nid, $name, $full, $kind, $acc,
                 $st, $ab, $se, $sum,
                 $fid, $sl, $el, $so, $eo, $sz,
-                $deps, $cons, $tok);
+                $deps, $cons, $tok, $locs);
             """;
         cmd.Parameters.AddWithValue("$id", type.Id);
         cmd.Parameters.AddWithValue("$pid", projectId);
@@ -1058,6 +1225,7 @@ public sealed class MapStore : IDisposable
         cmd.Parameters.AddWithValue("$deps", SerializeRelations(type.Dependencies));
         cmd.Parameters.AddWithValue("$cons", SerializeRelations(type.Consumers));
         cmd.Parameters.AddWithValue("$tok", type.TokenEstimate);
+        cmd.Parameters.AddWithValue("$locs", SerializeLocations(type));
         cmd.ExecuteNonQuery();
 
         using var fts = _connection.CreateCommand();
@@ -1124,6 +1292,273 @@ public sealed class MapStore : IDisposable
 
     private static string SerializeRelations(IReadOnlyList<RelationRef> relations) =>
         JsonSerializer.Serialize(relations, JsonOptions);
+
+    private static string SerializeLocations(TypeNode type)
+    {
+        var locs = type.Locations;
+        if (locs.Count == 0 && type.Span.FileId is not null)
+        {
+            locs =
+            [
+                new DeclarationLocation(
+                    type.Span.FileId,
+                    null,
+                    type.Span.StartLine,
+                    type.Span.EndLine,
+                    type.Span.SizeChars,
+                    IsPrimary: true)
+            ];
+        }
+
+        return JsonSerializer.Serialize(locs, JsonOptions);
+    }
+
+    private static List<DeclarationLocation> ParseLocations(
+        string? json,
+        SourceSpan primarySpan,
+        string? primaryRelativePath = null)
+    {
+        List<DeclarationLocation>? list = null;
+        if (!string.IsNullOrWhiteSpace(json) && json is not "[]")
+        {
+            try
+            {
+                list = JsonSerializer.Deserialize<List<DeclarationLocation>>(json, JsonOptions);
+            }
+            catch
+            {
+                list = null;
+            }
+        }
+
+        if (list is { Count: > 0 })
+            return list;
+
+        if (primarySpan.FileId is null && primarySpan.StartLine is null)
+            return [];
+
+        return
+        [
+            new DeclarationLocation(
+                primarySpan.FileId,
+                primaryRelativePath,
+                primarySpan.StartLine,
+                primarySpan.EndLine,
+                primarySpan.SizeChars,
+                IsPrimary: true)
+        ];
+    }
+
+    /// <summary>
+    /// Insert dependency edges (owner→target) and consumer edges (consumer→owner).
+    /// Returns number of rows inserted.
+    /// </summary>
+    private int InsertRelationEdges(
+        string ownerId,
+        IReadOnlyList<RelationRef> dependencies,
+        IReadOnlyList<RelationRef> consumers)
+    {
+        var n = 0;
+        foreach (var d in dependencies)
+        {
+            InsertEdge(ownerId, d.TargetId, KindToEdgeString(d.Kind), d.File, d.Line);
+            n++;
+        }
+
+        foreach (var c in consumers)
+        {
+            // Consumer JSON stores the consumer as Target*; edge direction is consumer → owner.
+            InsertEdge(c.TargetId, ownerId, KindToEdgeString(c.Kind), c.File, c.Line);
+            n++;
+        }
+
+        return n;
+    }
+
+    private void InsertEdge(string fromId, string toId, string kind, string? file, int? line)
+    {
+        if (string.IsNullOrEmpty(fromId) || string.IsNullOrEmpty(toId) || string.IsNullOrEmpty(kind))
+            return;
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO edges (from_id, to_id, kind, file, line)
+            VALUES ($from, $to, $kind, $file, $line);
+            """;
+        cmd.Parameters.AddWithValue("$from", fromId);
+        cmd.Parameters.AddWithValue("$to", toId);
+        cmd.Parameters.AddWithValue("$kind", kind);
+        cmd.Parameters.AddWithValue("$file", (object?)file ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$line", line is int l ? l : DBNull.Value);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void DeleteEdgesForOwner(string ownerId, bool consumersOnly)
+    {
+        using var cmd = _connection.CreateCommand();
+        if (consumersOnly)
+        {
+            // Inbound consumer edges: to_id = owner, kind = referencedBy
+            cmd.CommandText = """
+                DELETE FROM edges
+                WHERE to_id = $id AND kind = 'referencedBy';
+                """;
+        }
+        else
+        {
+            cmd.CommandText = """
+                DELETE FROM edges
+                WHERE from_id = $id OR to_id = $id;
+                """;
+        }
+
+        cmd.Parameters.AddWithValue("$id", ownerId);
+        cmd.ExecuteNonQuery();
+    }
+
+    private void RefreshEdgeCountMeta()
+    {
+        try
+        {
+            SetMeta("edge_count", ScalarInt("SELECT COUNT(*) FROM edges").ToString());
+        }
+        catch (SqliteException)
+        {
+            SetMeta("edge_count", "0");
+        }
+    }
+
+    private List<EdgeRow> QueryEdges(string sql, string id, int max)
+    {
+        var list = new List<EdgeRow>();
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.Parameters.AddWithValue("$max", max);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                list.Add(new EdgeRow(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetInt32(4)));
+            }
+        }
+        catch (SqliteException)
+        {
+            // table missing
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// When opening a v0 DB that has relation JSON but empty edges, backfill edges once.
+    /// Full reindex is still preferred for brand-new indexes (always writes schema_version=1).
+    /// </summary>
+    private void TryMigrateEdgesFromJson()
+    {
+        try
+        {
+            if (!HasSolutionData())
+                return;
+
+            var edgeCount = ScalarInt("SELECT COUNT(*) FROM edges");
+            if (edgeCount > 0)
+            {
+                // Already materialised
+                if (GetMeta("schema_version") is "0" or null)
+                    SetMeta("schema_version", CurrentSchemaVersion.ToString());
+                return;
+            }
+
+            // Any relation JSON present?
+            var withJson = ScalarInt("""
+                SELECT COUNT(*) FROM (
+                  SELECT 1 FROM types WHERE dependencies_json != '[]' OR consumers_json != '[]'
+                  UNION ALL
+                  SELECT 1 FROM members WHERE dependencies_json != '[]' OR consumers_json != '[]'
+                ) x
+                """);
+            if (withJson == 0)
+            {
+                // Empty relations — still mark as v1-capable schema
+                if (GetMeta("schema_version") is "0" or null)
+                    SetMeta("schema_version", CurrentSchemaVersion.ToString());
+                SetMeta("edge_count", "0");
+                return;
+            }
+
+            // Materialize rows first (SQLite: no nested commands while reader is open).
+            var pending = new List<(string Id, List<RelationRef> Deps, List<RelationRef> Cons)>();
+            using (var cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT id, dependencies_json, consumers_json FROM types;";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    pending.Add((
+                        reader.GetString(0),
+                        RelationPresentationParse(reader.IsDBNull(1) ? "[]" : reader.GetString(1)),
+                        RelationPresentationParse(reader.IsDBNull(2) ? "[]" : reader.GetString(2))));
+                }
+            }
+
+            using (var cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT id, dependencies_json, consumers_json FROM members;";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    pending.Add((
+                        reader.GetString(0),
+                        RelationPresentationParse(reader.IsDBNull(1) ? "[]" : reader.GetString(1)),
+                        RelationPresentationParse(reader.IsDBNull(2) ? "[]" : reader.GetString(2))));
+                }
+            }
+
+            using var tx = _connection.BeginTransaction();
+            var inserted = 0;
+            foreach (var (id, deps, cons) in pending)
+                inserted += InsertRelationEdges(id, deps, cons);
+
+            SetMeta("schema_version", CurrentSchemaVersion.ToString());
+            SetMeta("edge_count", inserted.ToString());
+            SetMeta("edges_migrated_from_json", "1");
+            tx.Commit();
+        }
+        catch (SqliteException)
+        {
+            // edges table not ready / empty db
+        }
+    }
+
+    private static List<RelationRef> RelationPresentationParse(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<RelationRef>>(json, JsonOptions) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static string KindToEdgeString(RelationKind kind) => kind switch
+    {
+        RelationKind.Inherits => "inherits",
+        RelationKind.Implements => "implements",
+        RelationKind.UsesInSignature => "usesInSignature",
+        RelationKind.UsesInMember => "usesInMember",
+        RelationKind.Calls => "calls",
+        RelationKind.ReferencedBy => "referencedBy",
+        _ => kind.ToString()
+    };
 
     private string? GetMeta(string key)
     {

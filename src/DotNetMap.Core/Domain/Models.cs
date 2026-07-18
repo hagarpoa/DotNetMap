@@ -51,6 +51,22 @@ public sealed record SourceSpan(
         StartLine is int s && EndLine is int e && e >= s ? e - s + 1 : 0;
 }
 
+/// <summary>
+/// One declaration site for a type (partials have multiple). DNM-016.
+/// <see cref="SourceSpan"/> remains the primary site for snippets.
+/// </summary>
+public sealed record DeclarationLocation(
+    string? FileId,
+    string? RelativePath,
+    int? StartLine,
+    int? EndLine,
+    int SizeChars,
+    bool IsPrimary = false)
+{
+    public int LineCount =>
+        StartLine is int s && EndLine is int e && e >= s ? e - s + 1 : 0;
+}
+
 public sealed record RelationRef(
     RelationKind Kind,
     string TargetId,
@@ -140,8 +156,10 @@ public sealed class TypeNode
     public bool IsStatic { get; init; }
     public bool IsAbstract { get; init; }
     public bool IsSealed { get; init; }
-    public string? Summary { get; init; }
+    public string? Summary { get; set; }
     public SourceSpan Span { get; init; } = new(null, null, null, null, null, 0);
+    /// <summary>All declaration sites (partials). First is primary (= Span). DNM-016.</summary>
+    public List<DeclarationLocation> Locations { get; init; } = [];
     public List<RelationRef> Dependencies { get; init; } = [];
     public List<RelationRef> Consumers { get; init; } = [];
     public int TokenEstimate { get; set; }
@@ -178,6 +196,8 @@ public sealed class IndexStatus
     /// <summary>Whether body_fts was populated on last index (DNM-013).</summary>
     public bool IndexBody { get; init; }
     public int BodyFileCount { get; init; }
+    /// <summary>Rows in normalized <c>edges</c> table (DNM-014).</summary>
+    public int EdgeCount { get; init; }
     public string? DotNetMapVersion { get; init; }
     public int ProjectCount { get; init; }
     public int TypeCount { get; init; }

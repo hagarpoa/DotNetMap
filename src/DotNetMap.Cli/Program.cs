@@ -82,6 +82,7 @@ statusCmd.SetAction(parseResult =>
         Console.WriteLine($"Token est.:   {s.TokenEstimateOverview}");
         Console.WriteLine($"Private:      {s.IncludePrivate} | Tests: {s.IncludeTest}");
         Console.WriteLine($"Body FTS:     {(s.IndexBody ? $"yes ({s.BodyFileCount} files)" : "no")} (use --index-body)");
+        Console.WriteLine($"Edges:        {s.EdgeCount} (schema v{s.SchemaVersion})");
         Console.WriteLine($"DotNetMap:    {s.DotNetMapVersion}");
 
         var stale = IndexStaleness.Check(store);

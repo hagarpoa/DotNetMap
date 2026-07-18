@@ -196,8 +196,22 @@ public static class CompactExporter
         sb.AppendLine($"# {t.FullName}");
         sb.AppendLine();
         sb.AppendLine($"- Kind: `{t.Kind}` | Access: `{t.Accessibility}`");
-        if (!string.IsNullOrEmpty(t.RelativePath))
+        var locs = t.AllLocations;
+        if (locs.Count > 1)
+        {
+            sb.AppendLine($"- Locations ({locs.Count} partials):");
+            foreach (var loc in locs)
+            {
+                var path = loc.RelativePath ?? loc.FileId ?? "?";
+                var primary = loc.IsPrimary ? " **primary**" : "";
+                sb.AppendLine($"  - `{path}` L{loc.StartLine}-{loc.EndLine} ({loc.LineCount} lines){primary}");
+            }
+        }
+        else if (!string.IsNullOrEmpty(t.RelativePath))
+        {
             sb.AppendLine($"- File: `{t.RelativePath}` L{t.StartLine}-{t.EndLine} ({t.LineCount} lines)");
+        }
+
         if (!string.IsNullOrEmpty(t.Summary))
             sb.AppendLine($"- Summary: {t.Summary}");
 
@@ -230,6 +244,7 @@ public static class CompactExporter
         var snippet = options.IncludeSnippet
             ? TrySnippet(t.RelativePath, t.StartLine, t.EndLine, options)
             : null;
+        var locs = t.AllLocations;
         var payload = new
         {
             t.Id,
@@ -239,6 +254,17 @@ public static class CompactExporter
             t.Summary,
             t.RelativePath,
             lines = new { start = t.StartLine, end = t.EndLine, count = t.LineCount },
+            locations = locs.Count > 0
+                ? locs.Select(l => new
+                {
+                    file = l.RelativePath ?? l.FileId,
+                    startLine = l.StartLine,
+                    endLine = l.EndLine,
+                    lineCount = l.LineCount,
+                    sizeChars = l.SizeChars,
+                    isPrimary = l.IsPrimary
+                }).ToList()
+                : null,
             detail = options.Detail.ToString().ToLowerInvariant(),
             relations = ShapeRelations(t.DependenciesJson, t.ConsumersJson, options),
             members = t.Members.Select(m => ShapeMember(m, options)),

@@ -114,10 +114,34 @@ public static class ImpactGraph
             var nextDepth = d + 1;
             var useLive = liveHop0 && d == 0;
 
+            var useSqlEdges = store.HasEdges() && !useLive;
+
             // --- Outbound ---
             if (direction is Direction.Both or Direction.Outbound)
             {
-                if (kind is "method" or "constructor" or "property" or "field" or "event")
+                if (useSqlEdges)
+                {
+                    foreach (var e in store.GetOutboundEdges(id, max: maxNodes))
+                    {
+                        if (e.Kind is not ("calls" or "usesInSignature" or "usesInMember"
+                            or "inherits" or "implements"))
+                            continue;
+
+                        var toKind = KindFromId(e.ToId);
+                        var toName = ShortId(e.ToId);
+                        if (nodes.Count >= maxNodes && !nodes.ContainsKey(e.ToId))
+                        {
+                            truncated = true;
+                            continue;
+                        }
+
+                        AddNode(e.ToId, toName, toKind, nextDepth);
+                        AddEdge(e.FromId, e.ToId, e.Kind, e.File, e.Line);
+                        if (nextDepth < depth && nodes.ContainsKey(e.ToId))
+                            queue.Enqueue((e.ToId, toName, toKind, nextDepth));
+                    }
+                }
+                else if (kind is "method" or "constructor" or "property" or "field" or "event")
                 {
                     var member = store.GetMemberDetail(id) ?? store.GetMemberDetail(name);
                     if (member is not null)
@@ -128,10 +152,7 @@ public static class ImpactGraph
                                 && r.Kind != RelationKind.UsesInMember)
                                 continue;
 
-                            var toKind = r.TargetId.StartsWith("method:", StringComparison.Ordinal) ? "method"
-                                : r.TargetId.StartsWith("property:", StringComparison.Ordinal) ? "property"
-                                : r.TargetId.StartsWith("field:", StringComparison.Ordinal) ? "field"
-                                : "type";
+                            var toKind = KindFromId(r.TargetId);
                             var toName = RelationPresentation.ShortName(r);
                             if (nodes.Count >= maxNodes && !nodes.ContainsKey(r.TargetId))
                             {
@@ -170,32 +191,32 @@ public static class ImpactGraph
                                 queue.Enqueue((r.TargetId, toName, "type", nextDepth));
                         }
                     }
+                }
 
-                    if (useLive)
+                if (useLive && kind == "type")
+                {
+                    try
                     {
-                        try
+                        var impls = await HierarchyQueries.FindImplementationsAsync(
+                            store, name, max: Math.Min(15, maxNodes), cancellationToken)
+                            .ConfigureAwait(false);
+                        foreach (var h in impls.Hits)
                         {
-                            var impls = await HierarchyQueries.FindImplementationsAsync(
-                                store, name, max: Math.Min(15, maxNodes), cancellationToken)
-                                .ConfigureAwait(false);
-                            foreach (var h in impls.Hits)
+                            if (nodes.Count >= maxNodes && !nodes.ContainsKey(h.TypeId))
                             {
-                                if (nodes.Count >= maxNodes && !nodes.ContainsKey(h.TypeId))
-                                {
-                                    truncated = true;
-                                    break;
-                                }
-
-                                AddNode(h.TypeId, h.FullName, "type", nextDepth);
-                                AddEdge(h.TypeId, id, h.Kind, h.File, h.Line); // implementor -> interface
-                                if (nextDepth < depth)
-                                    queue.Enqueue((h.TypeId, h.FullName, "type", nextDepth));
+                                truncated = true;
+                                break;
                             }
+
+                            AddNode(h.TypeId, h.FullName, "type", nextDepth);
+                            AddEdge(h.TypeId, id, h.Kind, h.File, h.Line); // implementor -> interface
+                            if (nextDepth < depth)
+                                queue.Enqueue((h.TypeId, h.FullName, "type", nextDepth));
                         }
-                        catch (Exception ex)
-                        {
-                            notes.Add($"implementations hop0: {ex.Message}");
-                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        notes.Add($"implementations hop0: {ex.Message}");
                     }
                 }
             }
@@ -203,9 +224,26 @@ public static class ImpactGraph
             // --- Inbound ---
             if (direction is Direction.Both or Direction.Inbound)
             {
-                if (kind is "method" or "constructor" or "property" or "field" or "event")
+                if (useSqlEdges)
                 {
-                    // Indexed consumers first
+                    foreach (var e in store.GetInboundEdges(id, max: maxNodes))
+                    {
+                        var fromKind = KindFromId(e.FromId);
+                        var fromName = ShortId(e.FromId);
+                        if (nodes.Count >= maxNodes && !nodes.ContainsKey(e.FromId))
+                        {
+                            truncated = true;
+                            continue;
+                        }
+
+                        AddNode(e.FromId, fromName, fromKind, nextDepth);
+                        AddEdge(e.FromId, e.ToId, e.Kind, e.File, e.Line);
+                        if (nextDepth < depth)
+                            queue.Enqueue((e.FromId, fromName, fromKind, nextDepth));
+                    }
+                }
+                else if (kind is "method" or "constructor" or "property" or "field" or "event")
+                {
                     var member = store.GetMemberDetail(id) ?? store.GetMemberDetail(name);
                     if (member is not null)
                     {
@@ -213,10 +251,7 @@ public static class ImpactGraph
                         {
                             if (r.Kind != RelationKind.ReferencedBy)
                                 continue;
-                            var fromKind = r.TargetId.StartsWith("method:", StringComparison.Ordinal) ? "method"
-                                : r.TargetId.StartsWith("property:", StringComparison.Ordinal) ? "property"
-                                : r.TargetId.StartsWith("type:", StringComparison.Ordinal) ? "type"
-                                : "member";
+                            var fromKind = KindFromId(r.TargetId);
                             var fromName = RelationPresentation.ShortName(r);
                             if (nodes.Count >= maxNodes && !nodes.ContainsKey(r.TargetId))
                             {
@@ -228,37 +263,6 @@ public static class ImpactGraph
                             AddEdge(r.TargetId, id, "referencedBy", r.File, r.Line);
                             if (nextDepth < depth)
                                 queue.Enqueue((r.TargetId, fromName, fromKind, nextDepth));
-                        }
-                    }
-
-                    if (useLive)
-                    {
-                        try
-                        {
-                            var live = await ImpactAnalysis.GetCallersAsync(
-                                store, name, updateDb: false, max: Math.Min(20, maxNodes), cancellationToken)
-                                .ConfigureAwait(false);
-                            foreach (var r in live.Callers)
-                            {
-                                var fromKind = r.TargetId.StartsWith("method:", StringComparison.Ordinal) ? "method"
-                                    : r.TargetId.StartsWith("property:", StringComparison.Ordinal) ? "property"
-                                    : "member";
-                                var fromName = RelationPresentation.ShortName(r);
-                                if (nodes.Count >= maxNodes && !nodes.ContainsKey(r.TargetId))
-                                {
-                                    truncated = true;
-                                    break;
-                                }
-
-                                AddNode(r.TargetId, fromName, fromKind, nextDepth);
-                                AddEdge(r.TargetId, id, "referencedBy", r.File, r.Line);
-                                if (nextDepth < depth)
-                                    queue.Enqueue((r.TargetId, fromName, fromKind, nextDepth));
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            notes.Add($"callers hop0: {ex.Message}");
                         }
                     }
                 }
@@ -282,8 +286,39 @@ public static class ImpactGraph
                                 queue.Enqueue((r.TargetId, fromName, "type", nextDepth));
                         }
                     }
+                }
 
-                    if (useLive)
+                if (useLive)
+                {
+                    if (kind is "method" or "constructor" or "property" or "field" or "event")
+                    {
+                        try
+                        {
+                            var live = await ImpactAnalysis.GetCallersAsync(
+                                store, name, updateDb: false, max: Math.Min(20, maxNodes), cancellationToken)
+                                .ConfigureAwait(false);
+                            foreach (var r in live.Callers)
+                            {
+                                var fromKind = KindFromId(r.TargetId);
+                                var fromName = RelationPresentation.ShortName(r);
+                                if (nodes.Count >= maxNodes && !nodes.ContainsKey(r.TargetId))
+                                {
+                                    truncated = true;
+                                    break;
+                                }
+
+                                AddNode(r.TargetId, fromName, fromKind, nextDepth);
+                                AddEdge(r.TargetId, id, "referencedBy", r.File, r.Line);
+                                if (nextDepth < depth)
+                                    queue.Enqueue((r.TargetId, fromName, fromKind, nextDepth));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            notes.Add($"callers hop0: {ex.Message}");
+                        }
+                    }
+                    else if (kind == "type")
                     {
                         try
                         {
@@ -317,9 +352,13 @@ public static class ImpactGraph
         if (nodes.Count >= maxNodes)
             truncated = true;
 
-        notes.Add(liveHop0
-            ? "Hop 0 used live SymbolFinder where needed; deeper hops use index edges only."
-            : "Index-only edges (no live SymbolFinder).");
+        notes.Add(store.HasEdges()
+            ? (liveHop0
+                ? "Hop 0 used live SymbolFinder where needed; deeper hops use edges table (DNM-014)."
+                : "Index-only walk via edges table (DNM-014).")
+            : (liveHop0
+                ? "Hop 0 used live SymbolFinder where needed; deeper hops use relation JSON."
+                : "Index-only edges from relation JSON (no edges table)."));
 
         return new Result(
             rootId,
@@ -407,6 +446,37 @@ public static class ImpactGraph
         if (text.Length <= OutputLimits.DefaultMaxChars)
             return text;
         return text[..(OutputLimits.DefaultMaxChars - 60)] + "\n\n_… truncated: true_\n";
+    }
+
+    private static string KindFromId(string id)
+    {
+        if (id.StartsWith("method:", StringComparison.Ordinal)) return "method";
+        if (id.StartsWith("property:", StringComparison.Ordinal)) return "property";
+        if (id.StartsWith("field:", StringComparison.Ordinal)) return "field";
+        if (id.StartsWith("event:", StringComparison.Ordinal)) return "event";
+        if (id.StartsWith("type:", StringComparison.Ordinal)) return "type";
+        return "member";
+    }
+
+    private static string ShortId(string id)
+    {
+        var bare = id;
+        var colon = bare.IndexOf(':');
+        if (colon >= 0 && colon + 1 < bare.Length)
+            bare = bare[(colon + 1)..];
+        var paren = bare.IndexOf('(');
+        if (paren > 0)
+            bare = bare[..paren];
+        var lastDot = bare.LastIndexOf('.');
+        if (lastDot > 0 && lastDot + 1 < bare.Length)
+        {
+            var prevDot = bare.LastIndexOf('.', lastDot - 1);
+            if (prevDot >= 0)
+                return bare[(prevDot + 1)..];
+            return bare[(lastDot + 1)..];
+        }
+
+        return bare;
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new()

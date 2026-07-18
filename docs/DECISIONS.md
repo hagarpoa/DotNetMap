@@ -73,16 +73,23 @@ Inclui:
 
 ## Relações no schema
 
-MVP: colunas JSON (`DependenciesJson`, opcionalmente `ConsumersJson` quando Phase B scoped rodou).
+**Dual store (DNM-014):**
+
+| Camada | Uso |
+|--------|-----|
+| JSON em `types`/`members` (`dependencies_json`, `consumers_json`) | Export, get type/method, cache compacto |
+| Tabela `edges(from_id, to_id, kind, file, line)` | Multi-hop SQL, impact hops profundos |
 
 Contrato JSON (array de objetos):
 
 ```json
 [
   {
-    "kind": "inherits|implements|uses_in_signature|uses_in_member",
+    "kind": "inherits|implements|usesInSignature|usesInMember|calls|referencedBy",
     "targetId": "type:Demo.Core.IOrderService",
-    "targetName": "Demo.Core.IOrderService"
+    "targetName": "Demo.Core.IOrderService",
+    "file": "optional",
+    "line": 0
   }
 ]
 ```
@@ -90,7 +97,16 @@ Contrato JSON (array de objetos):
 IDs estáveis: `{kind}:{fullyQualifiedMetadataName}`  
 Exemplos: `type:Demo.Core.Order`, `method:Demo.Core.Order.CalculateTotal(System.Decimal)`
 
-`schema_version` na tabela `meta`. Reindex total aceitável na v1→v2.
+**Schema versioning**
+
+- `schema_version` em `meta`. Write atual grava **1**.
+- Abrir DB v0 com JSON mas sem edges: **migração automática** JSON→`edges` (sem reindex).
+- Reindex total continua o caminho preferido após upgrades grandes.
+
+Direção nas edges:
+
+- Dependências / calls: `from` = dono do JSON → `to` = alvo  
+- Consumers / callers (`referencedBy`): `from` = consumidor → `to` = símbolo referenciado
 
 ---
 
@@ -114,8 +130,8 @@ Limites default de tools MCP:
 
 - Embeddings / sqlite-vec
 - Call graph completo materializado
-- Tabelas normalizadas de relações
-- Armazenar source completo no DB (só posição + hash; snippet on demand)
+- ~~Tabelas normalizadas de relações~~ (DNM-014 done)
+- Armazenar source completo no DB (só posição + hash; snippet on demand; body FTS opt-in)
 - UI web
 - Suporte multi-linguagem
 

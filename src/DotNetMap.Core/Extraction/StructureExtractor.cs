@@ -198,7 +198,7 @@ public sealed class StructureExtractor
                 if (symbol.ContainingType is not null && symbol.IsImplicitlyDeclared)
                     continue;
 
-                var typeNode = GetOrCreateType(projectNode, namespaceNodes, projectId, symbol, fileId, typeDecl);
+                var typeNode = GetOrCreateType(projectNode, namespaceNodes, projectId, symbol, fileId, relative, typeDecl);
                 AddMembers(typeNode, symbol, fileId, typeDecl.SyntaxTree, semanticModel, cancellationToken);
 
                 if (_options.LightDeps)
@@ -212,7 +212,7 @@ public sealed class StructureExtractor
                 if (symbol is null || !Visibility.IsIncluded(symbol.DeclaredAccessibility, _options.IncludePrivate))
                     continue;
 
-                var typeNode = GetOrCreateType(projectNode, namespaceNodes, projectId, symbol, fileId, del);
+                var typeNode = GetOrCreateType(projectNode, namespaceNodes, projectId, symbol, fileId, relative, del);
                 if (_options.LightDeps)
                     AddTypeLightDeps(typeNode, symbol);
             }
@@ -232,15 +232,41 @@ public sealed class StructureExtractor
         string projectId,
         INamedTypeSymbol symbol,
         string fileId,
+        string relativePath,
         SyntaxNode declaration)
     {
         var fullName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             .Replace("global::", "", StringComparison.Ordinal);
         var typeId = Ids.Type(GetMetadataName(symbol));
+        var span = GetSpan(declaration, fileId);
+        var rel = relativePath.Replace('\\', '/');
+        var location = new DeclarationLocation(
+            span.FileId,
+            rel,
+            span.StartLine,
+            span.EndLine,
+            span.SizeChars,
+            IsPrimary: false);
+
         var existing = projectNode.Types.FirstOrDefault(t => t.Id == typeId);
         if (existing is not null)
         {
-            // Partial: keep first span, still allow members from other files
+            // Partial: keep first span as primary; record every declaration site (DNM-016).
+            if (!existing.Locations.Any(l =>
+                    string.Equals(l.FileId, fileId, StringComparison.OrdinalIgnoreCase)
+                    && l.StartLine == span.StartLine))
+            {
+                existing.Locations.Add(location);
+            }
+
+            // Prefer XML summary from any partial that has one
+            if (string.IsNullOrEmpty(existing.Summary))
+            {
+                var sum = XmlSummary.FromSymbol(symbol);
+                if (!string.IsNullOrEmpty(sum))
+                    existing.Summary = sum;
+            }
+
             return existing;
         }
 
@@ -253,7 +279,7 @@ public sealed class StructureExtractor
             namespaceNodes[nsId] = new NamespaceNode { Id = nsId, Name = nsName };
         }
 
-        var span = GetSpan(declaration, fileId);
+        var primary = location with { IsPrimary = true };
         var typeNode = new TypeNode
         {
             Id = typeId,
@@ -266,7 +292,8 @@ public sealed class StructureExtractor
             IsAbstract = symbol.IsAbstract,
             IsSealed = symbol.IsSealed,
             Summary = XmlSummary.FromSymbol(symbol),
-            Span = span
+            Span = span,
+            Locations = [primary]
         };
 
         projectNode.Types.Add(typeNode);

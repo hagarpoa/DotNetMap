@@ -68,7 +68,7 @@ public class MapStoreTests
                 store.WriteMap(map);
                 var status = store.GetStatus();
 
-                Assert.Equal(0, status.SchemaVersion);
+                Assert.Equal(MapStore.CurrentSchemaVersion, status.SchemaVersion);
                 Assert.Equal("Demo", status.SolutionName);
                 Assert.Equal(1, status.ProjectCount);
                 Assert.Equal(1, status.TypeCount);

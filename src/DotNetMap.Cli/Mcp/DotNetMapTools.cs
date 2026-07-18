@@ -50,6 +50,7 @@ public static class DotNetMapTools
             s.IncludeTest,
             indexBody = s.IndexBody,
             bodyFileCount = s.BodyFileCount,
+            edgeCount = s.EdgeCount,
             s.DotNetMapVersion,
             databasePath = DatabasePath,
             isStale = stale.IsStale,
