@@ -378,7 +378,7 @@ public sealed class MapStore : IDisposable
             IncludePrivate = includePrivate,
             IncludeTest = includeTest,
             IndexedAtUtc = indexedAt,
-            DotNetMapVersion = GetMeta("dotnetmap_version") ?? "0.3.0"
+            DotNetMapVersion = GetMeta("dotnetmap_version") ?? "1.0.0"
         };
 
         using (var cmd = _connection.CreateCommand())
