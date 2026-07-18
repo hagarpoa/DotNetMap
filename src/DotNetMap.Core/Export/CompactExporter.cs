@@ -330,8 +330,9 @@ public static class CompactExporter
         foreach (var c in list)
         {
             var name = RelationPresentation.ShortName(c);
-            if (c.SiteLabel is not null)
-                sb.AppendLine($"- `{name}` @ `{c.SiteLabel}`");
+            var site = c.DisplaySiteLabel;
+            if (site is not null)
+                sb.AppendLine($"- `{name}` @ `{site}`");
             else
                 sb.AppendLine($"- `{name}`");
         }

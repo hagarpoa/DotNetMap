@@ -1,8 +1,8 @@
 # DotNetMap — Backlog de melhorias
 
-**Estado base:** v0.2.0  
+**Estado base:** v0.3.0  
 **Objetivo do produto:** índice local, AI-token-aware, de solutions .NET para agentes (refatoração, impacto, navegação).  
-**Última revisão:** 2026-07-14  
+**Última revisão:** 2026-07-18  
 
 ---
 
@@ -430,7 +430,7 @@
 
 ---
 
-### DNM-026 — Testes de regressão de snapshot de export
+### DNM-026 — Testes de regressão de snapshot de export ✅ (0.3.1)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -438,11 +438,15 @@
 | **Esforço** | S–M |
 | **Depende** | — |
 
-**Done when:** export MD do DemoSolution comparado a golden file (normalizado paths).
+- [x] `ExportSnapshotTests` — export MD do DemoSolution com paths/timestamps normalizados
+- [x] Golden `tests/DotNetMap.Tests/Goldens/demo-export.md`
+- [x] Refresh com `DOTNETMAP_UPDATE_GOLDEN=1`
+
+**Done when:** export MD do DemoSolution comparado a golden file (normalizado paths). ✅
 
 ---
 
-### DNM-027 — Config file `.dotnetmap.yml` / `dotnetmap.json`
+### DNM-027 — Config file `.dotnetmap.yml` / `dotnetmap.json` ✅ (0.3.1)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -450,8 +454,12 @@
 | **Esforço** | M |
 | **Depende** | — |
 
-**Solução:** excludes, includePrivate, maxCalls, bcl filter, db path default.  
-**Done when:** index sem flags usa config do diretório.
+- [x] `DotNetMapConfig` — `.dotnetmap.json` / `dotnetmap.json` (discover walk-up)
+- [x] Campos: `db`, `includePrivate`, `includeTest`, external calls/sig deps, `relations`, `excludeProjects`, `maxCalls`
+- [x] CLI flags explícitos vencem config; `--config`, `--exclude-project`, `--max-calls`
+- [x] `index` / `status` / `export` / `doctor` / `serve-mcp` resolvem `db` da config
+
+**Done when:** index sem flags usa config do diretório. ✅
 
 ---
 

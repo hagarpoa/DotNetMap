@@ -54,7 +54,36 @@ public sealed record SourceSpan(
 public sealed record RelationRef(
     RelationKind Kind,
     string TargetId,
-    string TargetName);
+    string TargetName,
+    /// <summary>Relative or absolute file of the reference site (DNM-005).</summary>
+    string? File = null,
+    /// <summary>1-based line of the reference site when known.</summary>
+    int? Line = null,
+    /// <summary>Compact label e.g. <c>OrderService.cs:L42</c>. Auto-derived when null.</summary>
+    string? SiteLabel = null)
+{
+    /// <summary>Site label for display; derives <c>file:Lline</c> when <see cref="SiteLabel"/> is unset.</summary>
+    public string? DisplaySiteLabel
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(SiteLabel))
+                return SiteLabel;
+            if (string.IsNullOrEmpty(File) && Line is null)
+                return null;
+            var filePart = string.IsNullOrEmpty(File)
+                ? null
+                : (File.Contains('/', StringComparison.Ordinal) || File.Contains('\\', StringComparison.Ordinal)
+                    ? Path.GetFileName(File.Replace('\\', '/'))
+                    : File);
+            if (filePart is not null && Line is int ln)
+                return $"{filePart}:L{ln}";
+            if (filePart is not null)
+                return filePart;
+            return Line is int l ? $"L{l}" : null;
+        }
+    }
+}
 
 public sealed class SolutionMap
 {

@@ -137,7 +137,7 @@ public static class ImpactAnalysis
                     caller = RelationPresentation.ShortName(c),
                     file = c.File,
                     line = c.Line,
-                    site = c.SiteLabel
+                    site = c.DisplaySiteLabel
                 }),
                 lines = new { start = result.Member.StartLine, end = result.Member.EndLine, count = result.Member.LineCount },
                 file = result.Member.RelativePath

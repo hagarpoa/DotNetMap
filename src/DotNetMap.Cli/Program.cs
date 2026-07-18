@@ -1,6 +1,7 @@
 using System.CommandLine;
 using DotNetMap.Cli.Mcp;
 using DotNetMap.Core.Analysis;
+using DotNetMap.Core.Config;
 using DotNetMap.Core.Domain;
 using DotNetMap.Core.Export;
 using DotNetMap.Core.Extraction;
@@ -8,9 +9,14 @@ using DotNetMap.Core.Store;
 
 var dbOption = new Option<FileInfo>("--db")
 {
-    Description = "Path to the DotNetMap SQLite database (default: .dotnetmap/index.db)."
+    Description = "Path to the DotNetMap SQLite database (default: config db, else .dotnetmap/index.db)."
 };
 dbOption.DefaultValueFactory = _ => new FileInfo(Path.Combine(".dotnetmap", "index.db"));
+
+var configOption = new Option<FileInfo?>("--config")
+{
+    Description = "Path to .dotnetmap.json / dotnetmap.json (default: discover from cwd or solution path)."
+};
 
 var formatOption = new Option<string>("--format")
 {
@@ -38,12 +44,14 @@ var statusVerboseOpt = new Option<bool>("--verbose")
 var statusCmd = new Command("status", "Show index database status and optional staleness.")
 {
     dbOption,
+    configOption,
     statusCheckOpt,
     statusVerboseOpt
 };
 statusCmd.SetAction(parseResult =>
 {
-    var db = parseResult.GetValue(dbOption)!;
+    var cfg = LoadConfig(parseResult, configOption);
+    var db = ResolveDb(parseResult, dbOption, cfg);
     var check = parseResult.GetValue(statusCheckOpt);
     var verbose = parseResult.GetValue(statusVerboseOpt);
     if (!TryOpenStore(db, out var store, out var err))
@@ -107,11 +115,13 @@ statusCmd.SetAction(parseResult =>
 var doctorCmd = new Command("doctor", "Check environment + index health (MSBuild, DB, stale, quality).")
 {
     dbOption,
+    configOption,
     formatOption
 };
 doctorCmd.SetAction(parseResult =>
 {
-    var db = parseResult.GetValue(dbOption)!;
+    var cfg = LoadConfig(parseResult, configOption);
+    var db = ResolveDb(parseResult, dbOption, cfg);
     var format = (parseResult.GetValue(formatOption) ?? "md").ToLowerInvariant();
     var report = Doctor.Run(db.FullName);
     var body = format == "json" ? Doctor.FormatJson(report) : Doctor.FormatMarkdown(report);
@@ -158,11 +168,22 @@ var includeExternalSigDeps = new Option<bool>("--include-external-signature-deps
 {
     Description = "Index member signature type deps from BCL/NuGet (default: solution types only)."
 };
+var excludeProjectsOption = new Option<string[]>("--exclude-project")
+{
+    Description = "Project name substrings or simple globs to skip (repeatable). Overrides config excludeProjects when set."
+};
+excludeProjectsOption.AllowMultipleArgumentsPerToken = true;
+excludeProjectsOption.DefaultValueFactory = _ => [];
+var maxCallsOption = new Option<int?>("--max-calls")
+{
+    Description = "Max outbound calls stored per method body (default: config or 30)."
+};
 
 var indexCmd = new Command("index", "Index a solution into the local SQLite map.")
 {
     pathArg,
     dbOption,
+    configOption,
     includePrivate,
     includeTest,
     fullRelations,
@@ -170,25 +191,26 @@ var indexCmd = new Command("index", "Index a solution into the local SQLite map.
     changedOnly,
     forceFull,
     includeExternalCalls,
-    includeExternalSigDeps
+    includeExternalSigDeps,
+    excludeProjectsOption,
+    maxCallsOption
 };
 indexCmd.SetAction(async (parseResult, ct) =>
 {
     var path = parseResult.GetValue(pathArg)!;
-    var db = parseResult.GetValue(dbOption)!;
-    var priv = parseResult.GetValue(includePrivate);
-    var tests = parseResult.GetValue(includeTest);
-    var full = parseResult.GetValue(fullRelations);
-    var relSpecs = parseResult.GetValue(relationsOption) ?? [];
-    var incremental = parseResult.GetValue(changedOnly) && !parseResult.GetValue(forceFull);
-    var extCalls = parseResult.GetValue(includeExternalCalls);
-    var extSig = parseResult.GetValue(includeExternalSigDeps);
 
     try
     {
-        IReadOnlyList<RelationScope> scopes = [];
+        var cfg = LoadConfig(parseResult, configOption, path);
+        var db = ResolveDb(parseResult, dbOption, cfg);
+        var relSpecs = parseResult.GetValue(relationsOption) ?? [];
+        var excludeCli = parseResult.GetValue(excludeProjectsOption) ?? [];
+        // Incremental is CLI-only (never from config): --changed-only unless --force.
+        var incremental = parseResult.GetValue(changedOnly) && !parseResult.GetValue(forceFull);
+
+        IReadOnlyList<RelationScope>? cliScopes = null;
         if (relSpecs.Length > 0)
-            scopes = RelationScope.ParseMany(relSpecs);
+            cliScopes = RelationScope.ParseMany(relSpecs);
 
         SolutionMap? previous = null;
         if (incremental && db.Exists)
@@ -198,19 +220,23 @@ indexCmd.SetAction(async (parseResult, ct) =>
                 previous = existing.LoadFullMap();
         }
 
-        var options = new IndexOptions
+        var options = cfg.ToIndexOptions(new IndexOptionsOverlay
         {
-            IncludePrivate = priv,
-            IncludeTest = tests,
-            FullRelations = full,
-            RelationScopes = scopes,
-            LightDeps = true,
-            IncludeExternalCalls = extCalls,
-            IncludeExternalSignatureDeps = extSig,
+            IncludePrivate = ExplicitBool(parseResult, includePrivate),
+            IncludeTest = ExplicitBool(parseResult, includeTest),
+            FullRelations = ExplicitBool(parseResult, fullRelations),
+            IncludeExternalCalls = ExplicitBool(parseResult, includeExternalCalls),
+            IncludeExternalSignatureDeps = ExplicitBool(parseResult, includeExternalSigDeps),
             ChangedOnly = incremental,
+            RelationScopes = cliScopes,
+            ExcludeProjects = excludeCli.Length > 0 ? excludeCli : null,
+            MaxCallsPerMethod = parseResult.GetValue(maxCallsOption),
             PreviousMap = previous,
             Progress = new Progress<string>(msg => Console.Error.WriteLine($"  {msg}"))
-        };
+        });
+
+        if (cfg.SourcePath is not null)
+            Console.Error.WriteLine($"  config: {cfg.SourcePath}");
 
         Console.Error.WriteLine(incremental ? "DotNetMap index (--changed-only)" : "DotNetMap index");
         var indexer = new SolutionIndexer();
@@ -331,6 +357,7 @@ maxTypesOpt.DefaultValueFactory = _ => 200;
 var exportCmd = new Command("export", "Export a compact map for AI context.")
 {
     dbOption,
+    configOption,
     formatOption,
     detailOption,
     outOption,
@@ -339,7 +366,8 @@ var exportCmd = new Command("export", "Export a compact map for AI context.")
 };
 exportCmd.SetAction(parseResult =>
 {
-    var db = parseResult.GetValue(dbOption)!;
+    var cfg = LoadConfig(parseResult, configOption);
+    var db = ResolveDb(parseResult, dbOption, cfg);
     var format = (parseResult.GetValue(formatOption) ?? "md").ToLowerInvariant();
     var detail = ParseDetail(parseResult.GetValue(detailOption));
     var outFile = parseResult.GetValue(outOption);
@@ -728,11 +756,13 @@ callersCmd.SetAction(async (parseResult, ct) =>
 // --- serve-mcp ---
 var serveCmd = new Command("serve-mcp", "Start MCP server over stdio (for AI agents).")
 {
-    dbOption
+    dbOption,
+    configOption
 };
 serveCmd.SetAction(async (parseResult, ct) =>
 {
-    var db = parseResult.GetValue(dbOption)!;
+    var cfg = LoadConfig(parseResult, configOption);
+    var db = ResolveDb(parseResult, dbOption, cfg);
     var path = db.FullName;
     if (!db.Exists)
         Console.Error.WriteLine($"warning: database not found yet at {path} (tools will fail until indexed).");
@@ -990,6 +1020,41 @@ root.Subcommands.Add(hotspotsCmd);
 root.Subcommands.Add(serveCmd);
 
 return await root.Parse(args).InvokeAsync();
+
+/// <summary>Load explicit --config or discover <c>.dotnetmap.json</c> / <c>dotnetmap.json</c>.</summary>
+static DotNetMapConfig LoadConfig(ParseResult parseResult, Option<FileInfo?> configOption, string? pathHint = null)
+{
+    var explicitCfg = parseResult.GetValue(configOption);
+    if (explicitCfg is not null)
+        return DotNetMapConfig.Load(explicitCfg.FullName);
+
+    return DotNetMapConfig.TryDiscover(Directory.GetCurrentDirectory(), pathHint) ?? DotNetMapConfig.Empty;
+}
+
+/// <summary>CLI <c>--db</c> wins; else config <c>db</c>; else default factory value.</summary>
+static FileInfo ResolveDb(ParseResult parseResult, Option<FileInfo> dbOption, DotNetMapConfig cfg)
+{
+    var result = parseResult.GetResult(dbOption);
+    if (result is { Implicit: false })
+        return parseResult.GetValue(dbOption)!;
+
+    var fromCfg = cfg.ResolveDatabasePath();
+    if (fromCfg is not null)
+        return new FileInfo(fromCfg);
+
+    return parseResult.GetValue(dbOption)!;
+}
+
+/// <summary>
+/// Returns the bool only when the user passed the flag on the CLI (so config can fill defaults).
+/// </summary>
+static bool? ExplicitBool(ParseResult parseResult, Option<bool> option)
+{
+    var result = parseResult.GetResult(option);
+    if (result is null || result.Implicit)
+        return null;
+    return parseResult.GetValue(option);
+}
 
 static bool MatchesType(TypeNode t, string name) =>
     t.FullName.Equals(name, StringComparison.OrdinalIgnoreCase)

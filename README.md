@@ -56,11 +56,14 @@ DotNetMap/
 ## CLI
 
 ```text
-dotnetmap index <path> [--db .dotnetmap/index.db] [--include-private] [--include-test]
+dotnetmap index <path> [--db .dotnetmap/index.db] [--config .dotnetmap.json]
+                 [--include-private] [--include-test]
                  [--relations type:Name|project:Name|full] [--full-relations]
+                 [--exclude-project pattern] [--max-calls N]
                  [--changed-only] [--force]
-dotnetmap status [--db ...] [--check] [--verbose]
-dotnetmap doctor [--db ...]
+                 [--include-external-calls] [--include-external-signature-deps]
+dotnetmap status [--db ...] [--config ...] [--check] [--verbose]
+dotnetmap doctor [--db ...] [--config ...]
 dotnetmap export [--format md|json] [--members] [--max-types N] [--out map.md]
 dotnetmap query <text> [--kind all|type|member] [--max N] [--format md|json]
 dotnetmap get <Type|Method|Type.Method> [--kind auto|type|member] [--format md|json] [--detail compact|full] [--snippet] [--context N]
@@ -71,8 +74,24 @@ dotnetmap implementations <Type|Interface>
 dotnetmap overrides <Method|Type.Method>
 dotnetmap impact <Type|Member> [--depth 2] [--max-nodes 40] [--direction both|in|out] [--no-live]
 dotnetmap hotspots [--by size|calls|fanin|types] [--top 15]
-dotnetmap index ... [--include-external-calls] [--include-external-signature-deps]
-dotnetmap serve-mcp [--db .dotnetmap/index.db]
+dotnetmap serve-mcp [--db .dotnetmap/index.db] [--config ...]
+```
+
+### Config file (DNM-027)
+
+Optional `.dotnetmap.json` or `dotnetmap.json` (walks up from cwd / solution path). Explicit CLI flags always win.
+
+```json
+{
+  "db": ".dotnetmap/index.db",
+  "includePrivate": false,
+  "includeTest": false,
+  "includeExternalCalls": false,
+  "includeExternalSignatureDeps": false,
+  "relations": ["type:IOrderService"],
+  "excludeProjects": ["*.Tests", "Benchmarks"],
+  "maxCalls": 30
+}
 ```
 
 ### Token-aware output (DNM-006 / DNM-007)
