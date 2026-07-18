@@ -12,8 +12,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnetmap</ToolCommandName>
     <PackageId>DotNetMap.Tool</PackageId>
-    <PackageVersion>0.3.4</PackageVersion>
-    <Version>0.3.4</Version>
+    <PackageVersion>1.0.0</PackageVersion>
+    <Version>1.0.0</Version>
     <Authors>Cesar Alano</Authors>
     <Description>Local AI-token-aware semantic map of a .NET solution (CLI + MCP).</Description>
     <PackageTags>dotnetmap;roslyn;mcp;dotnet;code-map;ai</PackageTags>

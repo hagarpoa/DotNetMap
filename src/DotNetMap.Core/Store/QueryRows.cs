@@ -10,6 +10,14 @@ public sealed record TypeSummaryRow(
     int TokenEstimate,
     int MemberCount);
 
+public sealed record ProjectSummaryRow(
+    string Name,
+    string Path,
+    string? TargetFramework,
+    bool IsTest,
+    int TypeCount,
+    int FileCount);
+
 public sealed record MemberSummaryRow(
     string Name,
     string Kind,

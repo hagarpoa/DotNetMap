@@ -80,7 +80,7 @@ public sealed class IndexOptions
         }
     }
 
-    public string DotNetMapVersion { get; init; } = "0.3.4";
+    public string DotNetMapVersion { get; init; } = "1.0.0";
 
     public IProgress<string>? Progress { get; init; }
 

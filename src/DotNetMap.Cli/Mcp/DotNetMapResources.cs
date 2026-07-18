@@ -30,4 +30,17 @@ public static class DotNetMapResources
             ? $"Type not found: {name}"
             : CompactExporter.TypeDetailToMarkdown(detail);
     }
+
+    [McpServerResource(UriTemplate = "method://{name}", Name = "MethodDetail", MimeType = "text/markdown")]
+    [Description("Markdown detail for a method/member by name (same content as get_method tool). DNM-039.")]
+    public static string MethodDetail(string name)
+    {
+        using var store = MapStore.Open(DotNetMapTools.DatabasePath);
+        if (!store.HasSolutionData())
+            return "Index is empty.";
+        var detail = store.GetMemberDetail(name);
+        return detail is null
+            ? $"Member not found: {name}"
+            : CompactExporter.MemberDetailToMarkdown(detail);
+    }
 }

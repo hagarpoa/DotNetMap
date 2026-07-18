@@ -28,9 +28,20 @@ dotnetmap doctor --db .dotnetmap/index.db
 
 Some MSBuild design-time warnings (e.g. binding redirects **MSB3277**) are filtered as noise. Remaining `workspace:` lines during `index` usually matter.
 
-### Linux / macOS
+### Linux / macOS (DNM-029 smoke)
 
-Install the .NET SDK matching the solution TFM. MSBuildLocator uses the SDK MSBuild. See DNM-029 for smoke validation.
+Install the .NET SDK matching the solution TFM (and net8.0 targeting pack if building `Demo.MultiTfm`). MSBuildLocator uses the SDK MSBuild.
+
+```bash
+dotnet --list-sdks
+dotnet restore samples/DemoSolution
+dotnet test
+dotnet run --project src/DotNetMap.Cli -- index samples/DemoSolution --db /tmp/dnm.db
+dotnet run --project src/DotNetMap.Cli -- status --db /tmp/dnm.db --verbose
+dotnet run --project src/DotNetMap.Cli -- get Money --db /tmp/dnm.db
+```
+
+Expected: index completes without crash; `status --verbose` lists projects with `tfm=…`.
 
 ---
 

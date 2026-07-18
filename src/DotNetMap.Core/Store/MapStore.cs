@@ -585,6 +585,34 @@ public sealed class MapStore : IDisposable
     }
 
 
+    public IReadOnlyList<ProjectSummaryRow> ListProjects(int max = 200)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT p.name, p.path, p.target_framework, p.is_test,
+                   (SELECT COUNT(*) FROM types t WHERE t.project_id = p.id) AS type_count,
+                   (SELECT COUNT(*) FROM source_files f WHERE f.project_id = p.id) AS file_count
+            FROM projects p
+            ORDER BY p.name
+            LIMIT $max;
+            """;
+        cmd.Parameters.AddWithValue("$max", Math.Clamp(max, 1, 500));
+        var list = new List<ProjectSummaryRow>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            list.Add(new ProjectSummaryRow(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.GetInt32(3) != 0,
+                reader.GetInt32(4),
+                reader.GetInt32(5)));
+        }
+
+        return list;
+    }
+
     public IReadOnlyList<TypeSummaryRow> ListTypes(int max = 500)
     {
         using var cmd = _connection.CreateCommand();

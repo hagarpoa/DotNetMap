@@ -115,7 +115,7 @@ public sealed class SolutionMap
     /// <summary>When true, generated sources were included (DNM-017).</summary>
     public bool IncludeGenerated { get; init; }
     public DateTimeOffset IndexedAtUtc { get; init; } = DateTimeOffset.UtcNow;
-    public string DotNetMapVersion { get; init; } = "0.3.4";
+    public string DotNetMapVersion { get; init; } = "1.0.0";
     public List<ProjectNode> Projects { get; init; } = [];
 }
 

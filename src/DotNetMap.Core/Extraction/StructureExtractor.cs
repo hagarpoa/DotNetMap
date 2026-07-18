@@ -56,10 +56,20 @@ public sealed class StructureExtractor
         var reindexed = 0;
         var skippedTest = 0;
 
+        // Multi-TFM solutions may expose the same .csproj multiple times (one Project per TFM).
+        // Keep a single Roslyn project per path — prefer the one with more documents (DNM-018).
         var projects = solution.Projects
             .Where(p => p.Language == LanguageNames.CSharp)
+            .GroupBy(p =>
+                string.IsNullOrEmpty(p.FilePath)
+                    ? "name:" + p.Name
+                    : Path.GetFullPath(p.FilePath),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(p => p.Documents.Count()).First())
             .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        var seenProjectIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var project in projects)
         {
@@ -81,6 +91,11 @@ public sealed class StructureExtractor
             }
 
             var projectId = Ids.Project(project.Name);
+            if (!seenProjectIds.Add(projectId))
+            {
+                _options.Progress?.Report($"skip duplicate project id: {project.Name}");
+                continue;
+            }
 
             ProjectNode? previous = null;
             if (useIncremental)
@@ -665,14 +680,38 @@ public sealed class StructureExtractor
         return symbol.ToDisplayString(MetadataFormat);
     }
 
+    /// <summary>
+    /// Best-effort TFM from the .csproj (DNM-018). Multi-TFM projects use the first listed
+    /// framework; MSBuildWorkspace typically materializes one TFM per project load.
+    /// </summary>
     private static string? TryGetTfm(Project project)
     {
-        // Roslyn may expose via CompilationOptions / AnalyzerConfig; best-effort from name or null
+        var path = project.FilePath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            return null;
+
         try
         {
-            if (project.ParseOptions is CSharpParseOptions)
+            var text = File.ReadAllText(path);
+            // Single TFM
+            var m = System.Text.RegularExpressions.Regex.Match(
+                text,
+                @"<TargetFramework>\s*([^<]+)\s*</TargetFramework>",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success)
+                return m.Groups[1].Value.Trim();
+
+            // Multi-TFM: take first (workspace usually indexes one configuration)
+            m = System.Text.RegularExpressions.Regex.Match(
+                text,
+                @"<TargetFrameworks>\s*([^<]+)\s*</TargetFrameworks>",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success)
             {
-                // Not TFM. Leave null unless we read MSBuild props later.
+                var all = m.Groups[1].Value.Trim();
+                var first = all.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .FirstOrDefault();
+                return first is null ? all : $"{first} (of {all})";
             }
         }
         catch

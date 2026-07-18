@@ -3,7 +3,7 @@
 - Path: `$SOLUTION/DemoSolution.slnx`
 - Indexed (UTC): $TIMESTAMP
 - Mode: `structure+light-deps` | Detail: `compact`
-- Projects: 2 | Types: 6 | Members: 15 | Files: 6
+- Projects: 3 | Types: 16 | Members: 36 | Files: 8
 - Token estimate (overview): ~TOKENS
 
 ## Types
@@ -18,9 +18,30 @@
 - **Demo.App.VipOrderCalculator** (class, public, 1 members) — VIP pricing: 10% discount via override.
   - Structural (1): `Demo.Core.OrderCalculator`
 - `public override decimal Adjust(decimal total)`  L9-9 (1 lines)
+- **Demo.Core.DemoTagAttribute** (class, public, 2 members) — Attribute for sample decoration.
+  - Structural (1): `System.Attribute`
+- `public DemoTagAttribute(string name)`  L60-64 (5 lines)
+- `public string Name`  L63-63 (1 lines)
 - **Demo.Core.IOrderService** (interface, public, 2 members) — Contract for order pricing and persistence.
 - `decimal CalculateTotal(IReadOnlyList<OrderLine> lines)`  L9-9 (1 lines)
 - `Task<Guid> SaveAsync(Order order, CancellationToken cancellationToken = default(CancellationToken))`  L12-12 (1 lines)
+- **Demo.Core.IRepository<T>** (interface, public, 1 members) — Generic service interface.
+- `T Find(string id)`  L8-8 (1 lines)
+- **Demo.Core.InMemoryRepository<T>** (class, public, 4 members) — Generic repository sample.
+  - Structural (1): `Demo.Core.IRepository<T>`
+- `public EventHandler<string> ItemAdded`  L34-34 (1 lines)
+- `public void Add(string id, T item)`  L38-42 (5 lines)
+- `public T Find(string id)`  L36-36 (1 lines)
+- `public T this[string id]`  L44-44 (1 lines)
+- **Demo.Core.Money** (record, public, 3 members) — Record DTO.
+  - Structural (1): `System.IEquatable<Demo.Core.Money>`
+- `public Money(decimal Amount, string Currency)`  L12-12 (1 lines)
+- `public decimal Amount`  L12-12 (1 lines)
+- `public string Currency`  L12-12 (1 lines)
+- **Demo.Core.NestedHost** (class, public, 1 members) — Nested type host.
+- `public NestedHost.NestedItem Create(string name)`  L56-56 (1 lines)
+- **Demo.Core.NestedHost.NestedItem** (class, public, 1 members) — Nested public class.
+- `public required string Name`  L53-53 (1 lines)
 - **Demo.Core.Order** (class, public, 4 members) — Customer order aggregate root.
 - `public decimal GetSubtotal()`  L11-11 (1 lines)
 - `public required string CustomerName`  L10-10 (1 lines)
@@ -33,5 +54,20 @@
 - `public int Quantity`  L19-19 (1 lines)
 - `public required string Sku`  L18-18 (1 lines)
 - `public decimal UnitPrice`  L20-20 (1 lines)
+- **Demo.Core.OrderStatus** (enum, public, 4 members) — Order lifecycle states.
+  - Structural (1): `System.Enum`
+- `Cancelled`  L26-26 (1 lines)
+- `Draft`  L23-23 (1 lines)
+- `Fulfilled`  L25-25 (1 lines)
+- `Submitted`  L24-24 (1 lines)
+- **Demo.Core.Point2D** (struct, public, 2 members) — Value type for coordinates.
+  - Structural (1): `System.ValueType`
+- `public Point2D(double X, double Y)`  L15-18 (4 lines)
+- `public double Magnitude`  L17-17 (1 lines)
+- **Demo.Core.TaggedAsyncService** (class, public, 1 members) — Class with attribute + async API.
+- `public Task<int> CountAsync(IEnumerable<int> values, CancellationToken cancellationToken = default(CancellationToken))`  L70-75 (6 lines)
+- **Demo.MultiTfm.SharedApi** (class, public, 2 members) — Cross-TFM sample type (DNM-018). Available on net8.0 and net10.0.
+- `public static int Add(int a, int b)`  L15-15 (1 lines)
+- `public static string FrameworkLabel`  L8-12 (5 lines)
 
-_~534 tokens_
+_~1097 tokens_

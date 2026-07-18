@@ -104,6 +104,16 @@ statusCmd.SetAction(parseResult =>
         if (verbose)
         {
             Console.WriteLine();
+            Console.WriteLine("Projects:");
+            foreach (var p in store.ListProjects())
+            {
+                var tfm = string.IsNullOrEmpty(p.TargetFramework) ? "?" : p.TargetFramework;
+                Console.WriteLine(
+                    $"  - {p.Name}  tfm={tfm}  types={p.TypeCount}  files={p.FileCount}"
+                    + (p.IsTest ? "  [test]" : ""));
+            }
+
+            Console.WriteLine();
             Console.Write(IndexQuality.FormatMarkdown(IndexQuality.Compute(store)));
         }
 

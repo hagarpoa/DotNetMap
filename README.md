@@ -17,28 +17,26 @@ It is a **structure + light-deps** index with optional deep relations on demand.
 
 ## Status
 
-- [x] Solution, Core, Cli, Tests
-- [x] SQLite schema v0 + `MapStore`
-- [x] CLI: `index`, `status`, `export`, `query`, `get`, `consumers`, `serve-mcp`
-- [x] Roslyn structural extraction + light deps
-- [x] FTS5 search + type detail (PR-3)
-- [x] Scoped consumers / SymbolFinder (PR-4)
-- [x] MCP server stdio (PR-5)
-- [x] Incremental (`--changed-only`) + `dotnet tool` pack (PR-6)
+**1.0.0** — local AI map ready for agent workflows.
+
+- [x] CLI + MCP (impact, snippets, hotspots, doctor, body FTS, edges)
+- [x] Sample language surface + multi-TFM + `.sln`/`.slnx`
+- [x] Security allowlist, troubleshooting, CHANGELOG / SECURITY
+- [x] `dotnet tool` pack (`DotNetMap.Tool`)
 
 See [docs/MVP_CHECKLIST.md](docs/MVP_CHECKLIST.md), [docs/DECISIONS.md](docs/DECISIONS.md), [docs/AGENT_PLAYBOOK.md](docs/AGENT_PLAYBOOK.md) (agent refactor workflows), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), [docs/RELEASE.md](docs/RELEASE.md), and [docs/BACKLOG.md](docs/BACKLOG.md).
 
 ## Quickstart
 
 ```powershell
-cd C:\Users\Cesar\source\repos\NetMap
+cd C:\Projects\AI\NetMap
 dotnet build
 dotnet test
-dotnet run --project src/DotNetMap.Cli -- index samples/DemoSolution --db .dotnetmap/index.db
-dotnet run --project src/DotNetMap.Cli -- status --db .dotnetmap/index.db
-dotnet run --project src/DotNetMap.Cli -- query Order --db .dotnetmap/index.db
-dotnet run --project src/DotNetMap.Cli -- get OrderService --db .dotnetmap/index.db
-dotnet run --project src/DotNetMap.Cli -- export --members --format md --db .dotnetmap/index.db
+dotnet pack src/DotNetMap.Cli/DotNetMap.Cli.csproj -c Release -o artifacts
+dotnet tool install -g DotNetMap.Tool --add-source artifacts --version 1.0.0
+dotnetmap index samples/DemoSolution --db .dotnetmap/index.db
+dotnetmap status --verbose --db .dotnetmap/index.db
+dotnetmap get Money --db .dotnetmap/index.db
 ```
 
 ## Layout

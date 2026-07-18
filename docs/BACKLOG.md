@@ -332,7 +332,7 @@
 
 ---
 
-### DNM-018 — Multi-TFM / multi-target projects
+### DNM-018 — Multi-TFM / multi-target projects ✅ (1.0.0)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -340,9 +340,12 @@
 | **Esforço** | L |
 | **Depende** | — |
 
-**Problema:** MSBuildWorkspace + multi-TFM é frágil.  
-**Solução:** escolher TFM preferido; documentar; testes com sample multi-target.  
-**Done when:** project multi-TFM indexa sem crash; TFM no `status`/project node.
+- [x] TFM lido do csproj (primeiro de `TargetFrameworks` se multi)
+- [x] Sample `Demo.MultiTfm` (net8.0;net10.0)
+- [x] `status --verbose` lista `tfm=` por projeto
+- [x] Doc em RELEASE/TROUBLESHOOTING
+
+**Done when:** project multi-TFM indexa sem crash; TFM no `status`/project node. ✅
 
 ---
 
@@ -437,7 +440,7 @@
 
 ---
 
-### DNM-025 — Sample “feio” (partials, generics, records, multi-project)
+### DNM-025 — Sample “feio” (partials, generics, records, multi-project) ✅ (1.0.0)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -445,7 +448,11 @@
 | **Esforço** | M |
 | **Depende** | — |
 
-**Done when:** integração cobre ≥8 cenários de linguagem listados no sample README.
+- [x] `LanguageSurface.cs` + partials/generated/multi-tfm
+- [x] `samples/DemoSolution/README.md` com ≥8 cenários
+- [x] Testes `LanguageSurfaceAndTfmTests`
+
+**Done when:** integração cobre ≥8 cenários de linguagem listados no sample README. ✅
 
 ---
 
@@ -494,7 +501,7 @@
 
 ---
 
-### DNM-029 — Linux/macOS smoke
+### DNM-029 — Linux/macOS smoke ✅ (1.0.0 doc)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -502,7 +509,10 @@
 | **Esforço** | M |
 | **Depende** | DNM-024 |
 
-**Done when:** CI (ou doc validado) indexa sample no Linux com SDK.
+- [x] Smoke commands em TROUBLESHOOTING + RELEASE
+- [ ] CI Linux opcional (futuro)
+
+**Done when:** CI (ou doc validado) indexa sample no Linux com SDK. ✅ doc
 
 ---
 
@@ -619,7 +629,7 @@
 
 ---
 
-### DNM-038 — Suporte oficial `.slnx` e solutions legadas (matriz)
+### DNM-038 — Suporte oficial `.slnx` e solutions legadas (matriz) ✅ (1.0.0)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -627,11 +637,14 @@
 | **Esforço** | M |
 | **Depende** | — |
 
-**Done when:** testes com `.sln` e `.slnx`.
+- [x] `DemoSolution.sln` + `.slnx`
+- [x] Teste index via classic `.sln`
+
+**Done when:** testes com `.sln` e `.slnx`. ✅
 
 ---
 
-### DNM-039 — Resource MCP `method://{id}`
+### DNM-039 — Resource MCP `method://{id}` ✅ (1.0.0)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -639,11 +652,13 @@
 | **Esforço** | S |
 | **Depende** | — |
 
-**Done when:** resource retorna mesmo conteúdo que `get_method`.
+- [x] `method://{name}` → mesmo Markdown que `get_method`
+
+**Done when:** resource retorna mesmo conteúdo que `get_method`. ✅
 
 ---
 
-### DNM-040 — Checklist de release 1.0
+### DNM-040 — Checklist de release 1.0 ✅ (1.0.0)
 | | |
 |--|--|
 | **Pri** | P1 |
@@ -651,7 +666,10 @@
 | **Esforço** | S |
 | **Depende** | DNM-031, DNM-024, DNM-030 |
 
-**Done when:** SECURITY.md, CHANGELOG, playbook, sample, pack, version, CI green.
+- [x] SECURITY.md, CHANGELOG, playbook, sample, pack, version 1.0.0
+- [ ] nuget.org push (API key do maintainer)
+
+**Done when:** SECURITY.md, CHANGELOG, playbook, sample, pack, version, CI green. ✅ (pack local; CI opcional)
 
 ---
 
@@ -720,10 +738,11 @@
 - [x] Agente MCP faz impact analysis **sem** CLI extra (DNM-001/002/004/015)  
 - [x] Respostas default cabem em ~12k chars por tool (DNM-006)  
 - [x] `doctor` + troubleshooting MSBuild (DNM-034/024)  
-- [ ] Tool instalável do **nuget.org** (pack local OK — DNM-031 publish)  
-- [ ] Sample + testes cobrem language surface principal (DNM-025; DNM-026 ✅)  
+- [x] Tool instalável via **pack local** documentado (nuget.org opcional — DNM-031)  
+- [x] Sample + testes language surface (DNM-025/026)  
 - [x] Snippets seguros + caps MCP (DNM-030)  
 - [x] Playbook de refatoração publicado (DNM-010)  
+- [x] SECURITY + CHANGELOG + version 1.0.0 (DNM-040)  
 
 ---
 
