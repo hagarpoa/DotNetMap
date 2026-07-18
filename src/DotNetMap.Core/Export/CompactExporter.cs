@@ -195,7 +195,8 @@ public static class CompactExporter
         var sb = new StringBuilder();
         sb.AppendLine($"# {t.FullName}");
         sb.AppendLine();
-        sb.AppendLine($"- Kind: `{t.Kind}` | Access: `{t.Accessibility}`");
+        sb.AppendLine($"- Kind: `{t.Kind}` | Access: `{t.Accessibility}`"
+                      + (t.IsGenerated ? " | **generated**" : ""));
         var locs = t.AllLocations;
         if (locs.Count > 1)
         {
@@ -253,6 +254,7 @@ public static class CompactExporter
             t.Accessibility,
             t.Summary,
             t.RelativePath,
+            isGenerated = t.IsGenerated,
             lines = new { start = t.StartLine, end = t.EndLine, count = t.LineCount },
             locations = locs.Count > 0
                 ? locs.Select(l => new

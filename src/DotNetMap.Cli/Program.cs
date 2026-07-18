@@ -80,7 +80,7 @@ statusCmd.SetAction(parseResult =>
         Console.WriteLine($"Files:        {s.FileCount}");
         Console.WriteLine($"DB size:      {s.DatabaseBytes:N0} bytes");
         Console.WriteLine($"Token est.:   {s.TokenEstimateOverview}");
-        Console.WriteLine($"Private:      {s.IncludePrivate} | Tests: {s.IncludeTest}");
+        Console.WriteLine($"Private:      {s.IncludePrivate} | Tests: {s.IncludeTest} | Generated: {s.IncludeGenerated}");
         Console.WriteLine($"Body FTS:     {(s.IndexBody ? $"yes ({s.BodyFileCount} files)" : "no")} (use --index-body)");
         Console.WriteLine($"Edges:        {s.EdgeCount} (schema v{s.SchemaVersion})");
         Console.WriteLine($"DotNetMap:    {s.DotNetMapVersion}");
@@ -184,6 +184,10 @@ var indexBodyOption = new Option<bool>("--index-body")
 {
     Description = "Index source file text into body FTS for query --body (heavier; default off). DNM-013."
 };
+var includeGeneratedOption = new Option<bool>("--include-generated")
+{
+    Description = "Include source-generator/designer files (*.g.cs etc.) and mark isGenerated (default off). DNM-017."
+};
 
 var indexCmd = new Command("index", "Index a solution into the local SQLite map.")
 {
@@ -200,7 +204,8 @@ var indexCmd = new Command("index", "Index a solution into the local SQLite map.
     includeExternalSigDeps,
     excludeProjectsOption,
     maxCallsOption,
-    indexBodyOption
+    indexBodyOption,
+    includeGeneratedOption
 };
 indexCmd.SetAction(async (parseResult, ct) =>
 {
@@ -235,6 +240,7 @@ indexCmd.SetAction(async (parseResult, ct) =>
             IncludeExternalCalls = ExplicitBool(parseResult, includeExternalCalls),
             IncludeExternalSignatureDeps = ExplicitBool(parseResult, includeExternalSigDeps),
             IndexBody = ExplicitBool(parseResult, indexBodyOption),
+            IncludeGenerated = ExplicitBool(parseResult, includeGeneratedOption),
             ChangedOnly = incremental,
             RelationScopes = cliScopes,
             ExcludeProjects = excludeCli.Length > 0 ? excludeCli : null,

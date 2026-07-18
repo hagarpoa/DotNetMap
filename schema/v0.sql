@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS source_files (
     absolute_path TEXT NOT NULL,
     content_hash TEXT NOT NULL,             -- SHA-256 hex
     length_chars INTEGER NOT NULL DEFAULT 0,
+    is_generated INTEGER NOT NULL DEFAULT 0, -- DNM-017
     UNIQUE (project_id, relative_path)
 );
 
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS types (
     is_static       INTEGER NOT NULL DEFAULT 0,
     is_abstract     INTEGER NOT NULL DEFAULT 0,
     is_sealed       INTEGER NOT NULL DEFAULT 0,
+    is_generated    INTEGER NOT NULL DEFAULT 0, -- DNM-017
     summary         TEXT NULL,
     -- Source location (primary partial declaration in MVP)
     file_id         TEXT NULL REFERENCES source_files(id) ON DELETE SET NULL,
@@ -101,6 +103,7 @@ CREATE TABLE IF NOT EXISTS members (
     is_static       INTEGER NOT NULL DEFAULT 0,
     is_abstract     INTEGER NOT NULL DEFAULT 0,
     is_async        INTEGER NOT NULL DEFAULT 0,
+    is_generated    INTEGER NOT NULL DEFAULT 0, -- DNM-017
     return_type     TEXT NULL,
     summary         TEXT NULL,
     file_id         TEXT NULL REFERENCES source_files(id) ON DELETE SET NULL,

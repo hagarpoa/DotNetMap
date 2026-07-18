@@ -64,7 +64,8 @@ public sealed record TypeDetail(
     int TokenEstimate,
     IReadOnlyList<MemberDetail> Members,
     /// <summary>All partial declaration sites (DNM-016). Empty when single-file / unknown.</summary>
-    IReadOnlyList<DeclarationLocation> Locations = null!)
+    IReadOnlyList<DeclarationLocation> Locations = null!,
+    bool IsGenerated = false)
 {
     public int LineCount =>
         StartLine is int s && EndLine is int e && e >= s ? e - s + 1 : 0;

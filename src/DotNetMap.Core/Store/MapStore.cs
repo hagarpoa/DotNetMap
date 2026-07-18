@@ -69,6 +69,9 @@ public sealed class MapStore : IDisposable
 
         // Additive columns for older DBs (CREATE TABLE IF NOT EXISTS does not alter).
         EnsureColumn("types", "locations_json", "TEXT NOT NULL DEFAULT '[]'");
+        EnsureColumn("types", "is_generated", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn("members", "is_generated", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn("source_files", "is_generated", "INTEGER NOT NULL DEFAULT 0");
 
         // Old DBs: materialize edges from JSON once (no full reindex required).
         TryMigrateEdgesFromJson();
@@ -160,6 +163,7 @@ public sealed class MapStore : IDisposable
         SetMeta("index_mode", ModeToString(map.Mode));
         SetMeta("include_private", map.IncludePrivate ? "1" : "0");
         SetMeta("include_test", map.IncludeTest ? "1" : "0");
+        SetMeta("include_generated", map.IncludeGenerated ? "1" : "0");
         SetMeta("index_body", map.IndexBody ? "1" : "0");
         SetMeta("body_file_count", bodyFiles.ToString());
         SetMeta("edge_count", edgeCount.ToString());
@@ -206,6 +210,7 @@ public sealed class MapStore : IDisposable
             IncludePrivate = GetMeta("include_private") == "1",
             IncludeTest = GetMeta("include_test") == "1",
             IndexBody = GetMeta("index_body") == "1",
+            IncludeGenerated = GetMeta("include_generated") == "1",
             BodyFileCount = bodyFiles,
             EdgeCount = edgeCount,
             DotNetMapVersion = GetMeta("dotnetmap_version"),
@@ -400,7 +405,7 @@ public sealed class MapStore : IDisposable
             {
                 using var fcmd = _connection.CreateCommand();
                 fcmd.CommandText = """
-                    SELECT id, relative_path, absolute_path, content_hash, length_chars
+                    SELECT id, relative_path, absolute_path, content_hash, length_chars, is_generated
                     FROM source_files WHERE project_id = $pid ORDER BY relative_path;
                     """;
                 fcmd.Parameters.AddWithValue("$pid", project.Id);
@@ -413,7 +418,8 @@ public sealed class MapStore : IDisposable
                         RelativePath = fr.GetString(1),
                         AbsolutePath = fr.GetString(2),
                         ContentHash = fr.GetString(3),
-                        LengthChars = fr.GetInt32(4)
+                        LengthChars = fr.GetInt32(4),
+                        IsGenerated = fr.FieldCount > 5 && !fr.IsDBNull(5) && fr.GetInt32(5) != 0
                     });
                 }
             }
@@ -439,7 +445,7 @@ public sealed class MapStore : IDisposable
                        is_static, is_abstract, is_sealed, summary,
                        file_id, start_line, end_line, start_offset, end_offset, size_chars,
                        dependencies_json, consumers_json, token_estimate,
-                       locations_json
+                       locations_json, is_generated
                 FROM types
                 WHERE project_id = $pid
                 ORDER BY full_name;
@@ -470,7 +476,8 @@ public sealed class MapStore : IDisposable
                     IsSealed = reader.GetInt32(8) != 0,
                     Summary = reader.IsDBNull(9) ? null : reader.GetString(9),
                     Span = span,
-                    TokenEstimate = reader.GetInt32(18)
+                    TokenEstimate = reader.GetInt32(18),
+                    IsGenerated = reader.FieldCount > 20 && !reader.IsDBNull(20) && reader.GetInt32(20) != 0
                 };
 
                 TryLoadRelations(reader.IsDBNull(16) ? "[]" : reader.GetString(16), type.Dependencies);
@@ -495,7 +502,7 @@ public sealed class MapStore : IDisposable
         cmd.CommandText = """
             SELECT id, name, kind, signature, accessibility, is_static, is_abstract, is_async,
                    return_type, summary, file_id, start_line, end_line, start_offset, end_offset,
-                   size_chars, dependencies_json, consumers_json, token_estimate
+                   size_chars, dependencies_json, consumers_json, token_estimate, is_generated
             FROM members WHERE type_id = $tid ORDER BY kind, name;
             """;
         cmd.Parameters.AddWithValue("$tid", type.Id);
@@ -523,7 +530,8 @@ public sealed class MapStore : IDisposable
                     reader.IsDBNull(13) ? null : reader.GetInt32(13),
                     reader.IsDBNull(14) ? null : reader.GetInt32(14),
                     reader.GetInt32(15)),
-                TokenEstimate = reader.GetInt32(18)
+                TokenEstimate = reader.GetInt32(18),
+                IsGenerated = reader.FieldCount > 19 && !reader.IsDBNull(19) && reader.GetInt32(19) != 0
             };
             TryLoadRelations(reader.IsDBNull(16) ? "[]" : reader.GetString(16), member.Dependencies);
             TryLoadRelations(reader.IsDBNull(17) ? "[]" : reader.GetString(17), member.Consumers);
@@ -688,7 +696,7 @@ public sealed class MapStore : IDisposable
             SELECT t.id, t.full_name, t.kind, t.accessibility, t.summary,
                    t.start_line, t.end_line, t.size_chars,
                    t.dependencies_json, t.consumers_json, t.token_estimate,
-                   f.relative_path, t.locations_json, t.file_id
+                   f.relative_path, t.locations_json, t.file_id, t.is_generated
             FROM types t
             LEFT JOIN source_files f ON f.id = t.file_id
             WHERE t.full_name = $q
@@ -722,6 +730,7 @@ public sealed class MapStore : IDisposable
         string? relativePath;
         string locationsJson;
         string? fileId;
+        var isGenerated = false;
 
         using (var reader = cmd.ExecuteReader())
         {
@@ -742,6 +751,7 @@ public sealed class MapStore : IDisposable
             relativePath = reader.IsDBNull(11) ? null : reader.GetString(11);
             locationsJson = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : "[]";
             fileId = reader.FieldCount > 13 && !reader.IsDBNull(13) ? reader.GetString(13) : null;
+            isGenerated = reader.FieldCount > 14 && !reader.IsDBNull(14) && reader.GetInt32(14) != 0;
         }
 
         var span = new SourceSpan(fileId, startLine, endLine, null, null, sizeChars);
@@ -761,7 +771,8 @@ public sealed class MapStore : IDisposable
             consJson,
             tokenEstimate,
             ListMemberDetails(typeId, maxMembers),
-            locations);
+            locations,
+            isGenerated);
     }
 
     private IReadOnlyList<MemberDetail> ListMemberDetails(string typeId, int max)
@@ -1165,8 +1176,8 @@ public sealed class MapStore : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO source_files (id, project_id, relative_path, absolute_path, content_hash, length_chars)
-            VALUES ($id, $pid, $rel, $abs, $hash, $len);
+            INSERT INTO source_files (id, project_id, relative_path, absolute_path, content_hash, length_chars, is_generated)
+            VALUES ($id, $pid, $rel, $abs, $hash, $len, $gen);
             """;
         cmd.Parameters.AddWithValue("$id", file.Id);
         cmd.Parameters.AddWithValue("$pid", projectId);
@@ -1174,6 +1185,7 @@ public sealed class MapStore : IDisposable
         cmd.Parameters.AddWithValue("$abs", file.AbsolutePath);
         cmd.Parameters.AddWithValue("$hash", file.ContentHash);
         cmd.Parameters.AddWithValue("$len", file.LengthChars);
+        cmd.Parameters.AddWithValue("$gen", file.IsGenerated ? 1 : 0);
         cmd.ExecuteNonQuery();
     }
 
@@ -1196,12 +1208,12 @@ public sealed class MapStore : IDisposable
         cmd.CommandText = """
             INSERT INTO types (
                 id, project_id, namespace_id, name, full_name, kind, accessibility,
-                is_static, is_abstract, is_sealed, summary,
+                is_static, is_abstract, is_sealed, is_generated, summary,
                 file_id, start_line, end_line, start_offset, end_offset, size_chars,
                 dependencies_json, consumers_json, token_estimate, locations_json)
             VALUES (
                 $id, $pid, $nid, $name, $full, $kind, $acc,
-                $st, $ab, $se, $sum,
+                $st, $ab, $se, $gen, $sum,
                 $fid, $sl, $el, $so, $eo, $sz,
                 $deps, $cons, $tok, $locs);
             """;
@@ -1215,6 +1227,7 @@ public sealed class MapStore : IDisposable
         cmd.Parameters.AddWithValue("$st", type.IsStatic ? 1 : 0);
         cmd.Parameters.AddWithValue("$ab", type.IsAbstract ? 1 : 0);
         cmd.Parameters.AddWithValue("$se", type.IsSealed ? 1 : 0);
+        cmd.Parameters.AddWithValue("$gen", type.IsGenerated ? 1 : 0);
         cmd.Parameters.AddWithValue("$sum", (object?)type.Summary ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$fid", (object?)type.Span.FileId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$sl", (object?)type.Span.StartLine ?? DBNull.Value);
@@ -1246,12 +1259,12 @@ public sealed class MapStore : IDisposable
         cmd.CommandText = """
             INSERT INTO members (
                 id, type_id, name, kind, signature, accessibility,
-                is_static, is_abstract, is_async, return_type, summary,
+                is_static, is_abstract, is_async, is_generated, return_type, summary,
                 file_id, start_line, end_line, start_offset, end_offset, size_chars,
                 dependencies_json, consumers_json, token_estimate)
             VALUES (
                 $id, $tid, $name, $kind, $sig, $acc,
-                $st, $ab, $as, $ret, $sum,
+                $st, $ab, $as, $gen, $ret, $sum,
                 $fid, $sl, $el, $so, $eo, $sz,
                 $deps, $cons, $tok);
             """;
@@ -1264,6 +1277,7 @@ public sealed class MapStore : IDisposable
         cmd.Parameters.AddWithValue("$st", member.IsStatic ? 1 : 0);
         cmd.Parameters.AddWithValue("$ab", member.IsAbstract ? 1 : 0);
         cmd.Parameters.AddWithValue("$as", member.IsAsync ? 1 : 0);
+        cmd.Parameters.AddWithValue("$gen", member.IsGenerated ? 1 : 0);
         cmd.Parameters.AddWithValue("$ret", (object?)member.ReturnType ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$sum", (object?)member.Summary ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$fid", (object?)member.Span.FileId ?? DBNull.Value);

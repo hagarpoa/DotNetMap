@@ -113,7 +113,8 @@ public static class IndexStaleness
             {
                 foreach (var cs in Directory.EnumerateFiles(projDir, "*.cs", SearchOption.AllDirectories))
                 {
-                    if (Visibility.ShouldSkipSourcePath(cs))
+                    // Skip bin/obj and generated noise for staleness of hand-written sources
+                    if (Visibility.ShouldSkipDocument(cs, includeGenerated: false))
                         continue;
 
                     var full = Path.GetFullPath(cs);

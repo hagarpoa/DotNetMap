@@ -38,6 +38,7 @@ public sealed class StructureExtractor
             IncludePrivate = _options.IncludePrivate,
             IncludeTest = _options.IncludeTest,
             IndexBody = _options.IndexBody,
+            IncludeGenerated = _options.IncludeGenerated,
             IndexedAtUtc = DateTimeOffset.UtcNow,
             DotNetMapVersion = _options.DotNetMapVersion
         };
@@ -155,12 +156,13 @@ public sealed class StructureExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (Visibility.ShouldSkipSourcePath(document.FilePath))
+            if (Visibility.ShouldSkipDocument(document.FilePath, _options.IncludeGenerated))
                 continue;
 
             if (document.FilePath is null)
                 continue;
 
+            var fileIsGenerated = Visibility.IsGeneratedSourcePath(document.FilePath);
             var text = await document.GetTextAsync(cancellationToken).ConfigureAwait(false);
             var content = text.ToString();
             var relative = GetRelativePath(solutionDir, document.FilePath);
@@ -174,7 +176,8 @@ public sealed class StructureExtractor
                     RelativePath = relative.Replace('\\', '/'),
                     AbsolutePath = document.FilePath,
                     ContentHash = ContentHasher.Sha256Hex(content),
-                    LengthChars = content.Length
+                    LengthChars = content.Length,
+                    IsGenerated = fileIsGenerated
                 };
             }
 
@@ -194,12 +197,15 @@ public sealed class StructureExtractor
                 if (!Visibility.IsIncluded(symbol.DeclaredAccessibility, _options.IncludePrivate))
                     continue;
 
-                // Skip nested types that are compiler-generated
-                if (symbol.ContainingType is not null && symbol.IsImplicitlyDeclared)
+                var symbolGenerated = fileIsGenerated || Visibility.IsGeneratedSymbol(symbol);
+                // Without --include-generated, still skip symbol-level generated in normal files
+                if (symbolGenerated && !_options.IncludeGenerated)
                     continue;
 
-                var typeNode = GetOrCreateType(projectNode, namespaceNodes, projectId, symbol, fileId, relative, typeDecl);
-                AddMembers(typeNode, symbol, fileId, typeDecl.SyntaxTree, semanticModel, cancellationToken);
+                var typeNode = GetOrCreateType(
+                    projectNode, namespaceNodes, projectId, symbol, fileId, relative, typeDecl, symbolGenerated);
+                AddMembers(typeNode, symbol, fileId, typeDecl.SyntaxTree, semanticModel, cancellationToken,
+                    fileIsGenerated);
 
                 if (_options.LightDeps)
                     AddTypeLightDeps(typeNode, symbol);
@@ -212,7 +218,12 @@ public sealed class StructureExtractor
                 if (symbol is null || !Visibility.IsIncluded(symbol.DeclaredAccessibility, _options.IncludePrivate))
                     continue;
 
-                var typeNode = GetOrCreateType(projectNode, namespaceNodes, projectId, symbol, fileId, relative, del);
+                var symbolGenerated = fileIsGenerated || Visibility.IsGeneratedSymbol(symbol);
+                if (symbolGenerated && !_options.IncludeGenerated)
+                    continue;
+
+                var typeNode = GetOrCreateType(
+                    projectNode, namespaceNodes, projectId, symbol, fileId, relative, del, symbolGenerated);
                 if (_options.LightDeps)
                     AddTypeLightDeps(typeNode, symbol);
             }
@@ -233,7 +244,8 @@ public sealed class StructureExtractor
         INamedTypeSymbol symbol,
         string fileId,
         string relativePath,
-        SyntaxNode declaration)
+        SyntaxNode declaration,
+        bool isGenerated = false)
     {
         var fullName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             .Replace("global::", "", StringComparison.Ordinal);
@@ -267,6 +279,9 @@ public sealed class StructureExtractor
                     existing.Summary = sum;
             }
 
+            if (isGenerated)
+                existing.IsGenerated = true;
+
             return existing;
         }
 
@@ -291,6 +306,7 @@ public sealed class StructureExtractor
             IsStatic = symbol.IsStatic,
             IsAbstract = symbol.IsAbstract,
             IsSealed = symbol.IsSealed,
+            IsGenerated = isGenerated,
             Summary = XmlSummary.FromSymbol(symbol),
             Span = span,
             Locations = [primary]
@@ -306,7 +322,8 @@ public sealed class StructureExtractor
         string fileId,
         SyntaxTree tree,
         SemanticModel model,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool fileIsGenerated = false)
     {
         foreach (var member in symbol.GetMembers())
         {
@@ -325,6 +342,10 @@ public sealed class StructureExtractor
             if (!Visibility.IsIncluded(member.DeclaredAccessibility, _options.IncludePrivate))
                 continue;
 
+            var memberGenerated = fileIsGenerated || Visibility.IsGeneratedSymbol(member);
+            if (memberGenerated && !_options.IncludeGenerated)
+                continue;
+
             // Only members declared in this syntax tree (partial types)
             var declRef = member.DeclaringSyntaxReferences
                 .FirstOrDefault(r => r.SyntaxTree == tree);
@@ -336,10 +357,10 @@ public sealed class StructureExtractor
 
             MemberNode? node = member switch
             {
-                IMethodSymbol method => CreateMethod(method, span),
-                IPropertySymbol prop => CreateProperty(prop, span),
-                IFieldSymbol field => CreateField(field, span),
-                IEventSymbol ev => CreateEvent(ev, span),
+                IMethodSymbol method => CreateMethod(method, span, memberGenerated),
+                IPropertySymbol prop => CreateProperty(prop, span, memberGenerated),
+                IFieldSymbol field => CreateField(field, span, memberGenerated),
+                IEventSymbol ev => CreateEvent(ev, span, memberGenerated),
                 _ => null
             };
 
@@ -370,7 +391,7 @@ public sealed class StructureExtractor
         });
     }
 
-    private static MemberNode CreateMethod(IMethodSymbol method, SourceSpan span)
+    private static MemberNode CreateMethod(IMethodSymbol method, SourceSpan span, bool isGenerated = false)
     {
         var kind = method.MethodKind == MethodKind.Constructor
             ? MemberKind.Constructor
@@ -389,6 +410,7 @@ public sealed class StructureExtractor
             IsStatic = method.IsStatic,
             IsAbstract = method.IsAbstract,
             IsAsync = method.IsAsync,
+            IsGenerated = isGenerated,
             ReturnType = method.MethodKind == MethodKind.Constructor
                 ? null
                 : method.ReturnType.ToDisplayString(ShortFormat),
@@ -397,7 +419,7 @@ public sealed class StructureExtractor
         };
     }
 
-    private static MemberNode CreateProperty(IPropertySymbol prop, SourceSpan span)
+    private static MemberNode CreateProperty(IPropertySymbol prop, SourceSpan span, bool isGenerated = false)
     {
         var display = prop.ToDisplayString(SignatureFormat);
         return new MemberNode
@@ -409,13 +431,14 @@ public sealed class StructureExtractor
             Accessibility = Visibility.ToString(prop.DeclaredAccessibility),
             IsStatic = prop.IsStatic,
             IsAbstract = prop.IsAbstract,
+            IsGenerated = isGenerated,
             ReturnType = prop.Type.ToDisplayString(ShortFormat),
             Summary = XmlSummary.FromSymbol(prop),
             Span = span
         };
     }
 
-    private static MemberNode? CreateField(IFieldSymbol field, SourceSpan span)
+    private static MemberNode? CreateField(IFieldSymbol field, SourceSpan span, bool isGenerated = false)
     {
         // Skip backing fields and implicit
         if (field.AssociatedSymbol is not null || field.IsImplicitlyDeclared)
@@ -429,13 +452,14 @@ public sealed class StructureExtractor
             Signature = field.ToDisplayString(SignatureFormat),
             Accessibility = Visibility.ToString(field.DeclaredAccessibility),
             IsStatic = field.IsStatic,
+            IsGenerated = isGenerated,
             ReturnType = field.Type.ToDisplayString(ShortFormat),
             Summary = XmlSummary.FromSymbol(field),
             Span = span
         };
     }
 
-    private static MemberNode CreateEvent(IEventSymbol ev, SourceSpan span) => new()
+    private static MemberNode CreateEvent(IEventSymbol ev, SourceSpan span, bool isGenerated = false) => new()
     {
         Id = Ids.Event(ev.ToDisplayString(MetadataFormat)),
         Name = ev.Name,
@@ -443,6 +467,7 @@ public sealed class StructureExtractor
         Signature = ev.ToDisplayString(SignatureFormat),
         Accessibility = Visibility.ToString(ev.DeclaredAccessibility),
         IsStatic = ev.IsStatic,
+        IsGenerated = isGenerated,
         ReturnType = ev.Type.ToDisplayString(ShortFormat),
         Summary = XmlSummary.FromSymbol(ev),
         Span = span

@@ -112,6 +112,8 @@ public sealed class SolutionMap
     public bool IncludeTest { get; init; }
     /// <summary>When true, MapStore also populates body_fts (DNM-013).</summary>
     public bool IndexBody { get; init; }
+    /// <summary>When true, generated sources were included (DNM-017).</summary>
+    public bool IncludeGenerated { get; init; }
     public DateTimeOffset IndexedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public string DotNetMapVersion { get; init; } = "0.3.0";
     public List<ProjectNode> Projects { get; init; } = [];
@@ -137,6 +139,8 @@ public sealed class SourceFileNode
     public required string AbsolutePath { get; init; }
     public required string ContentHash { get; init; }
     public int LengthChars { get; init; }
+    /// <summary>True when path looks like generator/designer output (DNM-017).</summary>
+    public bool IsGenerated { get; init; }
 }
 
 public sealed class NamespaceNode
@@ -156,6 +160,8 @@ public sealed class TypeNode
     public bool IsStatic { get; init; }
     public bool IsAbstract { get; init; }
     public bool IsSealed { get; init; }
+    /// <summary>True when type comes from generated source or has GeneratedCode attribute (DNM-017).</summary>
+    public bool IsGenerated { get; set; }
     public string? Summary { get; set; }
     public SourceSpan Span { get; init; } = new(null, null, null, null, null, 0);
     /// <summary>All declaration sites (partials). First is primary (= Span). DNM-016.</summary>
@@ -176,6 +182,8 @@ public sealed class MemberNode
     public bool IsStatic { get; init; }
     public bool IsAbstract { get; init; }
     public bool IsAsync { get; init; }
+    /// <summary>True when member is compiler/source-generator generated (DNM-017).</summary>
+    public bool IsGenerated { get; init; }
     public string? ReturnType { get; init; }
     public string? Summary { get; init; }
     public SourceSpan Span { get; init; } = new(null, null, null, null, null, 0);
@@ -195,6 +203,8 @@ public sealed class IndexStatus
     public bool IncludeTest { get; init; }
     /// <summary>Whether body_fts was populated on last index (DNM-013).</summary>
     public bool IndexBody { get; init; }
+    /// <summary>Whether generated sources were included (DNM-017).</summary>
+    public bool IncludeGenerated { get; init; }
     public int BodyFileCount { get; init; }
     /// <summary>Rows in normalized <c>edges</c> table (DNM-014).</summary>
     public int EdgeCount { get; init; }

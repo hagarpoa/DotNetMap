@@ -26,7 +26,8 @@ public static class ProjectFingerprint
         foreach (var document in project.Documents)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (Visibility.ShouldSkipSourcePath(document.FilePath) || document.FilePath is null)
+            if (Visibility.ShouldSkipDocument(document.FilePath, includeGenerated: false)
+                || document.FilePath is null)
                 continue;
 
             // Same as StructureExtractor: hash document text (UTF-16 source text as string bytes via UTF-8)

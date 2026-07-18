@@ -70,6 +70,10 @@ public sealed class DotNetMapConfig
     [JsonPropertyName("indexBody")]
     public bool? IndexBody { get; set; }
 
+    /// <summary>Include generated / designer sources (DNM-017). Default false.</summary>
+    [JsonPropertyName("includeGenerated")]
+    public bool? IncludeGenerated { get; set; }
+
     public static DotNetMapConfig Empty { get; } = new();
 
     /// <summary>Load from an explicit path. Throws on I/O or parse errors.</summary>
@@ -200,7 +204,8 @@ public sealed class DotNetMapConfig
             Progress = cli.Progress,
             MaxCallsPerMethod = maxCalls,
             ExcludeProjectPatterns = excludes,
-            IndexBody = cli.IndexBody ?? IndexBody ?? false
+            IndexBody = cli.IndexBody ?? IndexBody ?? false,
+            IncludeGenerated = cli.IncludeGenerated ?? IncludeGenerated ?? false
         };
     }
 
@@ -279,6 +284,7 @@ public sealed class IndexOptionsOverlay
     public bool? IncludeExternalSignatureDeps { get; init; }
     public bool? ChangedOnly { get; init; }
     public bool? IndexBody { get; init; }
+    public bool? IncludeGenerated { get; init; }
     public IReadOnlyList<RelationScope>? RelationScopes { get; init; }
     public IReadOnlyList<string>? ExcludeProjects { get; init; }
     public int? MaxCallsPerMethod { get; init; }

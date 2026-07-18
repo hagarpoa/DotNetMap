@@ -53,6 +53,7 @@ public sealed class SolutionIndexer
                 ExcludeProjectPatterns = options.ExcludeProjectPatterns,
                 MaxCallsPerMethod = options.MaxCallsPerMethod,
                 IndexBody = options.IndexBody,
+                IncludeGenerated = options.IncludeGenerated,
                 SolutionAssemblyNames = options.SolutionAssemblyNames,
                 DotNetMapVersion = options.DotNetMapVersion,
                 Progress = options.Progress
@@ -151,6 +152,7 @@ public sealed class SolutionIndexer
         IncludePrivate = map.IncludePrivate,
         IncludeTest = map.IncludeTest,
         IndexBody = map.IndexBody,
+        IncludeGenerated = map.IncludeGenerated,
         IndexedAtUtc = map.IndexedAtUtc,
         DotNetMapVersion = map.DotNetMapVersion,
         Projects = map.Projects
@@ -172,6 +174,7 @@ public sealed class SolutionIndexer
         ExcludeProjectPatterns = options.ExcludeProjectPatterns,
         MaxCallsPerMethod = options.MaxCallsPerMethod,
         IndexBody = options.IndexBody,
+        IncludeGenerated = options.IncludeGenerated,
         SolutionAssemblyNames = solutionAssemblyNames ?? options.SolutionAssemblyNames,
         DotNetMapVersion = options.DotNetMapVersion,
         Progress = options.Progress

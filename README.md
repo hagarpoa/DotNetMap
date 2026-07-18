@@ -57,7 +57,7 @@ DotNetMap/
 
 ```text
 dotnetmap index <path> [--db .dotnetmap/index.db] [--config .dotnetmap.json]
-                 [--include-private] [--include-test] [--index-body]
+                 [--include-private] [--include-test] [--include-generated] [--index-body]
                  [--relations type:Name|project:Name|full] [--full-relations]
                  [--exclude-project pattern] [--max-calls N]
                  [--changed-only] [--force]
@@ -89,6 +89,7 @@ Optional `.dotnetmap.json` or `dotnetmap.json` (walks up from cwd / solution pat
   "includeExternalCalls": false,
   "includeExternalSignatureDeps": false,
   "indexBody": false,
+  "includeGenerated": false,
   "relations": ["type:IOrderService"],
   "excludeProjects": ["*.Tests", "Benchmarks"],
   "maxCalls": 30

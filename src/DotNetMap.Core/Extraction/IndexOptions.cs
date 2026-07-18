@@ -59,6 +59,12 @@ public sealed class IndexOptions
     /// </summary>
     public bool IndexBody { get; init; }
 
+    /// <summary>
+    /// When true, include source-generator / designer / <c>*.g.cs</c> files and generated symbols (DNM-017).
+    /// Default off. Indexed nodes are labelled <c>isGenerated</c>.
+    /// </summary>
+    public bool IncludeGenerated { get; init; }
+
     /// <summary>Assembly names of projects in the solution (for external filtering).</summary>
     public IReadOnlySet<string> SolutionAssemblyNames { get; init; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);

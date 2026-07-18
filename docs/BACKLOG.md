@@ -315,7 +315,7 @@
 
 ---
 
-### DNM-017 — Source generators / generated code policy
+### DNM-017 — Source generators / generated code policy ✅ (0.3.4)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -323,8 +323,12 @@
 | **Esforço** | M |
 | **Depende** | — |
 
-**Solução:** detectar `IsGenerated` / AnalyzerConfig; flag `--include-generated`; marcar `isGenerated` no nó.  
-**Done when:** generated default excluído; flag inclui com label.
+- [x] Heurística de path (`*.g.cs`, designer, `/Generated/`) + atributos `GeneratedCode` / `CompilerGenerated`
+- [x] Default exclui; `--include-generated` / config `includeGenerated`
+- [x] `isGenerated` em file/type/member + label no export
+- [x] Sample `OrderGenerated.g.cs`; testes `GeneratedCodeTests`
+
+**Done when:** generated default excluído; flag inclui com label. ✅
 
 ---
 
