@@ -16,6 +16,7 @@ public sealed class OrderService : IOrderService
     {
         // Demo call edge for DotNetMap method graph (SaveAsync → CalculateTotal).
         _ = CalculateTotal(order.Lines);
+        // TODO: replace with real persistence (sample marker for query --body / DNM-013).
         // Demo only — no real persistence.
         return Task.FromResult(order.Id);
     }

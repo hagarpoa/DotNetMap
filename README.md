@@ -57,7 +57,7 @@ DotNetMap/
 
 ```text
 dotnetmap index <path> [--db .dotnetmap/index.db] [--config .dotnetmap.json]
-                 [--include-private] [--include-test]
+                 [--include-private] [--include-test] [--index-body]
                  [--relations type:Name|project:Name|full] [--full-relations]
                  [--exclude-project pattern] [--max-calls N]
                  [--changed-only] [--force]
@@ -65,7 +65,7 @@ dotnetmap index <path> [--db .dotnetmap/index.db] [--config .dotnetmap.json]
 dotnetmap status [--db ...] [--config ...] [--check] [--verbose]
 dotnetmap doctor [--db ...] [--config ...]
 dotnetmap export [--format md|json] [--members] [--max-types N] [--out map.md]
-dotnetmap query <text> [--kind all|type|member] [--max N] [--format md|json]
+dotnetmap query <text> [--kind all|type|member] [--body] [--max N] [--format md|json]
 dotnetmap get <Type|Method|Type.Method> [--kind auto|type|member] [--format md|json] [--detail compact|full] [--snippet] [--context N]
 dotnetmap snippet <Type|Method> [--context N]
 dotnetmap callers <Method|Property|Field|Type.Member> [--update]
@@ -88,10 +88,21 @@ Optional `.dotnetmap.json` or `dotnetmap.json` (walks up from cwd / solution pat
   "includeTest": false,
   "includeExternalCalls": false,
   "includeExternalSignatureDeps": false,
+  "indexBody": false,
   "relations": ["type:IOrderService"],
   "excludeProjects": ["*.Tests", "Benchmarks"],
   "maxCalls": 30
 }
+```
+
+### Body search (DNM-013)
+
+Optional full-text over source files (off by default — heavier index):
+
+```powershell
+dotnetmap index samples/DemoSolution --index-body --db .dotnetmap/index.db
+dotnetmap query TODO --body --db .dotnetmap/index.db
+# → [body] `Demo.App/OrderService.cs:L19` — `// TODO: ...`
 ```
 
 ### Token-aware output (DNM-006 / DNM-007)

@@ -94,6 +94,8 @@ public sealed class SolutionMap
     public IndexMode Mode { get; init; } = IndexMode.StructureLightDeps;
     public bool IncludePrivate { get; init; }
     public bool IncludeTest { get; init; }
+    /// <summary>When true, MapStore also populates body_fts (DNM-013).</summary>
+    public bool IndexBody { get; init; }
     public DateTimeOffset IndexedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public string DotNetMapVersion { get; init; } = "0.3.0";
     public List<ProjectNode> Projects { get; init; } = [];
@@ -173,6 +175,9 @@ public sealed class IndexStatus
     public string? IndexMode { get; init; }
     public bool IncludePrivate { get; init; }
     public bool IncludeTest { get; init; }
+    /// <summary>Whether body_fts was populated on last index (DNM-013).</summary>
+    public bool IndexBody { get; init; }
+    public int BodyFileCount { get; init; }
     public string? DotNetMapVersion { get; init; }
     public int ProjectCount { get; init; }
     public int TypeCount { get; init; }

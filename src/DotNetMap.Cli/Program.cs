@@ -81,6 +81,7 @@ statusCmd.SetAction(parseResult =>
         Console.WriteLine($"DB size:      {s.DatabaseBytes:N0} bytes");
         Console.WriteLine($"Token est.:   {s.TokenEstimateOverview}");
         Console.WriteLine($"Private:      {s.IncludePrivate} | Tests: {s.IncludeTest}");
+        Console.WriteLine($"Body FTS:     {(s.IndexBody ? $"yes ({s.BodyFileCount} files)" : "no")} (use --index-body)");
         Console.WriteLine($"DotNetMap:    {s.DotNetMapVersion}");
 
         var stale = IndexStaleness.Check(store);
@@ -178,6 +179,10 @@ var maxCallsOption = new Option<int?>("--max-calls")
 {
     Description = "Max outbound calls stored per method body (default: config or 30)."
 };
+var indexBodyOption = new Option<bool>("--index-body")
+{
+    Description = "Index source file text into body FTS for query --body (heavier; default off). DNM-013."
+};
 
 var indexCmd = new Command("index", "Index a solution into the local SQLite map.")
 {
@@ -193,7 +198,8 @@ var indexCmd = new Command("index", "Index a solution into the local SQLite map.
     includeExternalCalls,
     includeExternalSigDeps,
     excludeProjectsOption,
-    maxCallsOption
+    maxCallsOption,
+    indexBodyOption
 };
 indexCmd.SetAction(async (parseResult, ct) =>
 {
@@ -227,6 +233,7 @@ indexCmd.SetAction(async (parseResult, ct) =>
             FullRelations = ExplicitBool(parseResult, fullRelations),
             IncludeExternalCalls = ExplicitBool(parseResult, includeExternalCalls),
             IncludeExternalSignatureDeps = ExplicitBool(parseResult, includeExternalSigDeps),
+            IndexBody = ExplicitBool(parseResult, indexBodyOption),
             ChangedOnly = incremental,
             RelationScopes = cliScopes,
             ExcludeProjects = excludeCli.Length > 0 ? excludeCli : null,
@@ -239,6 +246,8 @@ indexCmd.SetAction(async (parseResult, ct) =>
             Console.Error.WriteLine($"  config: {cfg.SourcePath}");
 
         Console.Error.WriteLine(incremental ? "DotNetMap index (--changed-only)" : "DotNetMap index");
+        if (options.IndexBody)
+            Console.Error.WriteLine("  body FTS: on");
         var indexer = new SolutionIndexer();
         var result = await indexer.IndexAsync(path, options, ct).ConfigureAwait(false);
 
@@ -417,11 +426,11 @@ exportCmd.SetAction(parseResult =>
 // --- query ---
 var queryArg = new Argument<string>("text")
 {
-    Description = "Free-text search over type/member names and summaries (FTS5)."
+    Description = "Free-text search over type/member names and summaries (FTS5), or source body with --body."
 };
 var kindOption = new Option<string>("--kind")
 {
-    Description = "Filter: all | type | member (default: all)."
+    Description = "Filter: all | type | member (default: all). Ignored with --body."
 };
 kindOption.DefaultValueFactory = _ => "all";
 var maxOption = new Option<int>("--max")
@@ -429,13 +438,18 @@ var maxOption = new Option<int>("--max")
     Description = "Max results (default: 20)."
 };
 maxOption.DefaultValueFactory = _ => 20;
+var bodySearchOption = new Option<bool>("--body")
+{
+    Description = "Search indexed source bodies (requires index --index-body). Returns file:line (DNM-013)."
+};
 
-var queryCmd = new Command("query", "Search the index (FTS5 over names + summaries).")
+var queryCmd = new Command("query", "Search the index (FTS5 over names + summaries, or --body).")
 {
     queryArg,
     dbOption,
     kindOption,
     maxOption,
+    bodySearchOption,
     formatOption,
     detailOption,
     outOption
@@ -446,11 +460,12 @@ queryCmd.SetAction(parseResult =>
     var db = parseResult.GetValue(dbOption)!;
     var kind = (parseResult.GetValue(kindOption) ?? "all").ToLowerInvariant();
     var max = parseResult.GetValue(maxOption);
+    var searchBody = parseResult.GetValue(bodySearchOption);
     var format = (parseResult.GetValue(formatOption) ?? "md").ToLowerInvariant();
     var detail = ParseDetail(parseResult.GetValue(detailOption));
     var outFile = parseResult.GetValue(outOption);
 
-    if (kind is not ("all" or "type" or "member"))
+    if (!searchBody && kind is not ("all" or "type" or "member"))
     {
         Console.Error.WriteLine("error: --kind must be all, type, or member.");
         return 1;
@@ -470,7 +485,14 @@ queryCmd.SetAction(parseResult =>
             return 2;
         }
 
-        var hits = store.Search(text, kind, max);
+        if (searchBody && !store.HasBodyIndex())
+        {
+            Console.Error.WriteLine(
+                "error: body FTS not indexed. Re-run: dotnetmap index <path> --index-body");
+            return 1;
+        }
+
+        var hits = store.Search(text, kind, max, body: searchBody);
         var qOpts = new ExportOptions { Detail = detail };
         var body = format switch
         {

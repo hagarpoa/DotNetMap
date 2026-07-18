@@ -37,6 +37,7 @@ public sealed class StructureExtractor
             Mode = _options.Mode,
             IncludePrivate = _options.IncludePrivate,
             IncludeTest = _options.IncludeTest,
+            IndexBody = _options.IndexBody,
             IndexedAtUtc = DateTimeOffset.UtcNow,
             DotNetMapVersion = _options.DotNetMapVersion
         };

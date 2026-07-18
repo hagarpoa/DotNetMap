@@ -53,6 +53,12 @@ public sealed class IndexOptions
     /// <summary>Max outbound calls stored per method body (default 30).</summary>
     public int MaxCallsPerMethod { get; init; } = 30;
 
+    /// <summary>
+    /// When true, index full source file text into body_fts for <c>query --body</c> (DNM-013).
+    /// Heavier; default off.
+    /// </summary>
+    public bool IndexBody { get; init; }
+
     /// <summary>Assembly names of projects in the solution (for external filtering).</summary>
     public IReadOnlySet<string> SolutionAssemblyNames { get; init; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);

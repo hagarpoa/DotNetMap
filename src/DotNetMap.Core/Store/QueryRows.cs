@@ -16,13 +16,19 @@ public sealed record MemberSummaryRow(
     int TokenEstimate);
 
 public sealed record SearchHit(
-    string Category, // "type" | "member"
+    string Category, // "type" | "member" | "body"
     string Id,
     string Name,
     string? Display,
     string? Summary,
     string? ParentType,
-    double? Rank);
+    double? Rank,
+    /// <summary>Relative path for body hits (DNM-013).</summary>
+    string? RelativePath = null,
+    /// <summary>1-based line of first match for body hits.</summary>
+    int? Line = null,
+    /// <summary>Single-line snippet around the match (body hits).</summary>
+    string? Snippet = null);
 
 public sealed record TypeDetail(
     string Id,

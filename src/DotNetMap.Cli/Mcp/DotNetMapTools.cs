@@ -48,6 +48,8 @@ public static class DotNetMapTools
             s.TokenEstimateOverview,
             s.IncludePrivate,
             s.IncludeTest,
+            indexBody = s.IndexBody,
+            bodyFileCount = s.BodyFileCount,
             s.DotNetMapVersion,
             databasePath = DatabasePath,
             isStale = stale.IsStale,
@@ -90,13 +92,15 @@ public static class DotNetMapTools
 
     [McpServerTool(Name = "search"), Description(
         "FTS5 search over type/member names and summaries. Prefer before grepping. " +
-        "Example: search(query=\"OrderService\", kind=\"type\", max=10)")]
+        "Set body=true to search source text (requires index --index-body). Returns file:line for body hits. " +
+        "Example: search(query=\"OrderService\", kind=\"type\", max=10); search(query=\"TODO\", body=true)")]
     public static string Search(
         [Description("Free-text query")] string query,
-        [Description("all | type | member")] string kind = "all",
+        [Description("all | type | member (ignored when body=true)")] string kind = "all",
         [Description("Max hits (default 15, max 50)")] int max = 15,
         [Description("md or json")] string format = "md",
-        [Description("compact or full")] string detail = "compact")
+        [Description("compact or full")] string detail = "compact",
+        [Description("Search indexed source bodies (DNM-013); needs index --index-body")] bool body = false)
     {
         max = Math.Clamp(max, 1, OutputLimits.DefaultMaxSearchHits);
         kind = string.IsNullOrWhiteSpace(kind) ? "all" : kind.ToLowerInvariant();
@@ -104,7 +108,12 @@ public static class DotNetMapTools
             kind = "all";
 
         using var store = OpenOrThrow();
-        var hits = store.Search(query, kind, max);
+        if (body && !store.HasBodyIndex())
+        {
+            return "Body FTS not indexed. Re-run: dotnetmap index <path> --index-body (or set indexBody:true in .dotnetmap.json).";
+        }
+
+        var hits = store.Search(query, kind, max, body: body);
         var opts = new ExportOptions { Detail = ParseDetail(detail), MaxChars = OutputLimits.DefaultMaxChars };
         return format.Equals("json", StringComparison.OrdinalIgnoreCase)
             ? CompactExporter.SearchToJson(hits, query, opts)

@@ -245,7 +245,7 @@
 
 ---
 
-### DNM-013 — Full-text no body (FTS opcional)
+### DNM-013 — Full-text no body (FTS opcional) ✅ (0.3.2)
 | | |
 |--|--|
 | **Pri** | P2 |
@@ -253,9 +253,12 @@
 | **Esforço** | L |
 | **Depende** | — |
 
-**Problema:** achar strings, magic numbers, TODOs no código.  
-**Solução:** FTS5 opcional de conteúdo (ou path+line index); flag `--index-body` (pesado). Default off.  
-**Done when:** `query --body "TODO"` encontra ocorrências com file/line.
+- [x] `body_fts` (schema v0) + meta `index_body` / `body_file_count`
+- [x] `index --index-body` / config `indexBody` (default off; max 512k chars/file)
+- [x] `query --body` + MCP `search(body=true)` com file:line + snippet
+- [x] Sample `TODO` em OrderService; testes `BodyFtsTests`
+
+**Done when:** `query --body "TODO"` encontra ocorrências com file/line. ✅
 
 ---
 
@@ -665,7 +668,7 @@
 | Necessidade do modelo | Status 0.2 | Backlog |
 |----------------------|------------|---------|
 | Overview solution | OK | — |
-| Buscar por nome | OK | DNM-013 (body) |
+| Buscar por nome | OK | DNM-013 body ✅ |
 | Definição type/method + lines | OK | DNM-004 (snippet), DNM-016 (partials) |
 | Calls outbound | OK | DNM-007 (filtro BCL) |
 | Callers method | CLI only | DNM-001, DNM-005 |

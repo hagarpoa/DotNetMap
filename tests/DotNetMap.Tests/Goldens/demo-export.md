@@ -11,9 +11,9 @@
 - **Demo.App.OrderService** (class, public, 3 members) — Default implementation.
   - Structural (1): `Demo.Core.IOrderService`
 - `public decimal CalculateTotal(IReadOnlyList<OrderLine> lines)`  L11-12 (2 lines)
-- `public Task<Guid> SaveAsync(Order order, CancellationToken cancellationToken = default(CancellationToken))`  L15-21 (7 lines)
+- `public Task<Guid> SaveAsync(Order order, CancellationToken cancellationToken = default(CancellationToken))`  L15-22 (8 lines)
   - calls (1): `Demo.App.OrderService.CalculateTotal`
-- `public Task<Guid> SaveAsync2(Order order, CancellationToken cancellationToken = default(CancellationToken))`  L23-29 (7 lines)
+- `public Task<Guid> SaveAsync2(Order order, CancellationToken cancellationToken = default(CancellationToken))`  L24-30 (7 lines)
   - calls (1): `Demo.App.OrderService.CalculateTotal`
 - **Demo.App.VipOrderCalculator** (class, public, 1 members) — VIP pricing: 10% discount via override.
   - Structural (1): `Demo.Core.OrderCalculator`

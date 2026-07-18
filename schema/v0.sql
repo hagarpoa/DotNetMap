@@ -141,3 +141,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS members_fts USING fts5(
     summary,
     tokenize = 'porter unicode61'
 );
+
+-- ---------------------------------------------------------------------------
+-- Optional source body FTS (DNM-013). Populated only when index --index-body.
+-- meta body_indexed = '0' | '1'
+-- ---------------------------------------------------------------------------
+CREATE VIRTUAL TABLE IF NOT EXISTS body_fts USING fts5(
+    file_id UNINDEXED,
+    relative_path UNINDEXED,
+    absolute_path UNINDEXED,
+    content,
+    tokenize = 'porter unicode61'
+);

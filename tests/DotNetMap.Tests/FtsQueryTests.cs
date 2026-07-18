@@ -26,4 +26,12 @@ public class FtsQueryTests
     {
         Assert.Equal("%Order%", FtsQuery.ToLikePattern("Order"));
     }
+
+    [Fact]
+    public void ExtractTokens_SplitsWords()
+    {
+        var tokens = FtsQuery.ExtractTokens("TODO replace persistence");
+        Assert.Contains("TODO", tokens);
+        Assert.Contains("replace", tokens);
+    }
 }

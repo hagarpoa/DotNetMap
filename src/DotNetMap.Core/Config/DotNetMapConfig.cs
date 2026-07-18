@@ -66,6 +66,10 @@ public sealed class DotNetMapConfig
     [JsonPropertyName("maxCalls")]
     public int? MaxCalls { get; set; }
 
+    /// <summary>Index source body into FTS for <c>query --body</c> (DNM-013). Default false.</summary>
+    [JsonPropertyName("indexBody")]
+    public bool? IndexBody { get; set; }
+
     public static DotNetMapConfig Empty { get; } = new();
 
     /// <summary>Load from an explicit path. Throws on I/O or parse errors.</summary>
@@ -195,7 +199,8 @@ public sealed class DotNetMapConfig
             PreviousMap = cli.PreviousMap,
             Progress = cli.Progress,
             MaxCallsPerMethod = maxCalls,
-            ExcludeProjectPatterns = excludes
+            ExcludeProjectPatterns = excludes,
+            IndexBody = cli.IndexBody ?? IndexBody ?? false
         };
     }
 
@@ -273,6 +278,7 @@ public sealed class IndexOptionsOverlay
     public bool? IncludeExternalCalls { get; init; }
     public bool? IncludeExternalSignatureDeps { get; init; }
     public bool? ChangedOnly { get; init; }
+    public bool? IndexBody { get; init; }
     public IReadOnlyList<RelationScope>? RelationScopes { get; init; }
     public IReadOnlyList<string>? ExcludeProjects { get; init; }
     public int? MaxCallsPerMethod { get; init; }

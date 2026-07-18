@@ -50,6 +50,9 @@ public sealed class SolutionIndexer
                 IncludeExternalSignatureDeps = options.IncludeExternalSignatureDeps,
                 ChangedOnly = false,
                 PreviousMap = null,
+                ExcludeProjectPatterns = options.ExcludeProjectPatterns,
+                MaxCallsPerMethod = options.MaxCallsPerMethod,
+                IndexBody = options.IndexBody,
                 SolutionAssemblyNames = options.SolutionAssemblyNames,
                 DotNetMapVersion = options.DotNetMapVersion,
                 Progress = options.Progress
@@ -70,21 +73,7 @@ public sealed class SolutionIndexer
         foreach (var p in solution.Projects)
             assemblyNames.Add(p.Name);
 
-        options = new IndexOptions
-        {
-            IncludePrivate = options.IncludePrivate,
-            IncludeTest = options.IncludeTest,
-            FullRelations = options.FullRelations,
-            RelationScopes = options.RelationScopes,
-            LightDeps = options.LightDeps,
-            IncludeExternalCalls = options.IncludeExternalCalls,
-            IncludeExternalSignatureDeps = options.IncludeExternalSignatureDeps,
-            ChangedOnly = options.ChangedOnly,
-            PreviousMap = options.PreviousMap,
-            SolutionAssemblyNames = assemblyNames,
-            DotNetMapVersion = options.DotNetMapVersion,
-            Progress = options.Progress
-        };
+        options = CloneOptions(options, assemblyNames);
 
         if (!options.IncludeExternalCalls)
             options.Progress?.Report("calls: solution-local only (use --include-external-calls for BCL)");
@@ -161,8 +150,30 @@ public sealed class SolutionIndexer
         Mode = mode,
         IncludePrivate = map.IncludePrivate,
         IncludeTest = map.IncludeTest,
+        IndexBody = map.IndexBody,
         IndexedAtUtc = map.IndexedAtUtc,
         DotNetMapVersion = map.DotNetMapVersion,
         Projects = map.Projects
+    };
+
+    private static IndexOptions CloneOptions(
+        IndexOptions options,
+        IReadOnlySet<string>? solutionAssemblyNames = null) => new()
+    {
+        IncludePrivate = options.IncludePrivate,
+        IncludeTest = options.IncludeTest,
+        FullRelations = options.FullRelations,
+        RelationScopes = options.RelationScopes,
+        LightDeps = options.LightDeps,
+        IncludeExternalCalls = options.IncludeExternalCalls,
+        IncludeExternalSignatureDeps = options.IncludeExternalSignatureDeps,
+        ChangedOnly = options.ChangedOnly,
+        PreviousMap = options.PreviousMap,
+        ExcludeProjectPatterns = options.ExcludeProjectPatterns,
+        MaxCallsPerMethod = options.MaxCallsPerMethod,
+        IndexBody = options.IndexBody,
+        SolutionAssemblyNames = solutionAssemblyNames ?? options.SolutionAssemblyNames,
+        DotNetMapVersion = options.DotNetMapVersion,
+        Progress = options.Progress
     };
 }

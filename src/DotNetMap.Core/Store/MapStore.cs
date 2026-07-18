@@ -73,6 +73,7 @@ public sealed class MapStore : IDisposable
 
         // Full rewrite for MVP simplicity (incremental reindex per project comes in PR-6).
         Execute("""
+            DELETE FROM body_fts;
             DELETE FROM members_fts;
             DELETE FROM types_fts;
             DELETE FROM members;
@@ -85,11 +86,16 @@ public sealed class MapStore : IDisposable
 
         InsertSolution(map);
 
+        var bodyFiles = 0;
         foreach (var project in map.Projects)
         {
             InsertProject(map.Id, project);
             foreach (var file in project.Files)
+            {
                 InsertFile(project.Id, file);
+                if (map.IndexBody && TryInsertBodyFts(file))
+                    bodyFiles++;
+            }
             foreach (var ns in project.Namespaces)
                 InsertNamespace(project.Id, ns);
             foreach (var type in project.Types)
@@ -111,11 +117,16 @@ public sealed class MapStore : IDisposable
         SetMeta("index_mode", ModeToString(map.Mode));
         SetMeta("include_private", map.IncludePrivate ? "1" : "0");
         SetMeta("include_test", map.IncludeTest ? "1" : "0");
+        SetMeta("index_body", map.IndexBody ? "1" : "0");
+        SetMeta("body_file_count", bodyFiles.ToString());
         SetMeta("dotnetmap_version", map.DotNetMapVersion);
         SetMeta("token_estimate_overview", TokenEstimator.EstimateOverview(map).ToString());
 
         tx.Commit();
     }
+
+    /// <summary>Max chars of source text stored per file in body_fts (DNM-013).</summary>
+    public const int MaxBodyFileChars = 512_000;
 
     public IndexStatus GetStatus()
     {
@@ -132,6 +143,9 @@ public sealed class MapStore : IDisposable
         if (File.Exists(_dbPath))
             dbBytes = new FileInfo(_dbPath).Length;
 
+        var bodyFiles = 0;
+        _ = int.TryParse(GetMeta("body_file_count"), out bodyFiles);
+
         return new IndexStatus
         {
             SchemaVersion = schema,
@@ -141,6 +155,8 @@ public sealed class MapStore : IDisposable
             IndexMode = GetMeta("index_mode"),
             IncludePrivate = GetMeta("include_private") == "1",
             IncludeTest = GetMeta("include_test") == "1",
+            IndexBody = GetMeta("index_body") == "1",
+            BodyFileCount = bodyFiles,
             DotNetMapVersion = GetMeta("dotnetmap_version"),
             ProjectCount = ScalarInt("SELECT COUNT(*) FROM projects"),
             TypeCount = ScalarInt("SELECT COUNT(*) FROM types"),
@@ -468,13 +484,17 @@ public sealed class MapStore : IDisposable
 
     /// <summary>
     /// Search types and/or members via FTS5, with LIKE fallback.
+    /// When <paramref name="body"/> is true, searches source body_fts only (DNM-013).
     /// </summary>
-    /// <param name="kind">type | member | all</param>
-    public IReadOnlyList<SearchHit> Search(string text, string kind = "all", int max = 20)
+    /// <param name="kind">type | member | all (ignored when body=true)</param>
+    public IReadOnlyList<SearchHit> Search(string text, string kind = "all", int max = 20, bool body = false)
     {
         kind = kind.ToLowerInvariant();
         if (max < 1) max = 1;
         if (max > 200) max = 200;
+
+        if (body)
+            return SearchBodyFts(text, max);
 
         var hits = new List<SearchHit>();
         var match = FtsQuery.ToMatchExpression(text);
@@ -496,6 +516,21 @@ public sealed class MapStore : IDisposable
             .ThenBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
             .Take(max)
             .ToList();
+    }
+
+    /// <summary>True when last index ran with <c>--index-body</c> and body_fts has rows.</summary>
+    public bool HasBodyIndex()
+    {
+        if (GetMeta("index_body") == "1")
+            return true;
+        try
+        {
+            return ScalarInt("SELECT COUNT(*) FROM body_fts") > 0;
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
     }
 
     public TypeDetail? GetTypeDetail(string nameOrId, int maxMembers = 200)
@@ -713,6 +748,89 @@ public sealed class MapStore : IDisposable
                 reader.IsDBNull(13) ? null : reader.GetString(13),
                 reader.IsDBNull(14) ? null : reader.GetString(14)));
         }
+        return list;
+    }
+
+    private bool TryInsertBodyFts(SourceFileNode file)
+    {
+        if (string.IsNullOrEmpty(file.AbsolutePath) || !File.Exists(file.AbsolutePath))
+            return false;
+
+        try
+        {
+            var info = new FileInfo(file.AbsolutePath);
+            if (info.Length > MaxBodyFileChars * 2) // rough byte gate before read
+                return false;
+
+            var text = File.ReadAllText(file.AbsolutePath);
+            if (text.Length == 0)
+                return false;
+            if (text.Length > MaxBodyFileChars)
+                text = text[..MaxBodyFileChars];
+
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO body_fts (file_id, relative_path, absolute_path, content)
+                VALUES ($id, $rel, $abs, $content);
+                """;
+            cmd.Parameters.AddWithValue("$id", file.Id);
+            cmd.Parameters.AddWithValue("$rel", file.RelativePath);
+            cmd.Parameters.AddWithValue("$abs", file.AbsolutePath);
+            cmd.Parameters.AddWithValue("$content", text);
+            cmd.ExecuteNonQuery();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private List<SearchHit> SearchBodyFts(string text, int max)
+    {
+        var list = new List<SearchHit>();
+        var match = FtsQuery.ToMatchExpression(text);
+        var tokens = FtsQuery.ExtractTokens(text);
+
+        // Only body_fts — no disk scrape. Callers must index with --index-body first.
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT file_id, relative_path, content, bm25(body_fts) AS rank
+                FROM body_fts
+                WHERE body_fts MATCH $m
+                ORDER BY rank
+                LIMIT $max;
+                """;
+            cmd.Parameters.AddWithValue("$m", match);
+            cmd.Parameters.AddWithValue("$max", max);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var fileId = reader.GetString(0);
+                var rel = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                var content = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                var rank = reader.IsDBNull(3) ? (double?)null : reader.GetDouble(3);
+                var (line, snippet) = FtsQuery.FindFirstMatchLine(content, tokens);
+                list.Add(new SearchHit(
+                    "body",
+                    fileId,
+                    Path.GetFileName(rel.Replace('\\', '/')),
+                    rel,
+                    snippet,
+                    null,
+                    rank,
+                    RelativePath: rel,
+                    Line: line,
+                    Snippet: snippet));
+            }
+        }
+        catch (SqliteException)
+        {
+            // body_fts missing
+        }
+
         return list;
     }
 

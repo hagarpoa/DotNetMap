@@ -161,6 +161,15 @@ public static class CompactExporter
                 if (!string.IsNullOrEmpty(h.Summary) && options.Detail == DetailLevel.Full)
                     sb.Append($" — {h.Summary}");
             }
+            else if (h.Category == "body")
+            {
+                var loc = h.RelativePath ?? h.Display ?? h.Name;
+                if (h.Line is int ln)
+                    loc = $"{loc}:L{ln}";
+                sb.Append($"- **[body]** `{loc}`");
+                if (!string.IsNullOrEmpty(h.Snippet))
+                    sb.Append($" — `{ShortSig(h.Snippet)}`");
+            }
             else
             {
                 sb.Append($"- **[member]** `{h.ParentType}.{h.Name}`");
