@@ -2,7 +2,7 @@ namespace DotNetMap.Core.Source;
 
 /// <summary>
 /// Reads source snippets on demand from disk (never stored in SQLite).
-/// Paths must stay under the solution root (basic allowlist).
+/// Paths must stay under the solution root (allowlist — DNM-030).
 /// </summary>
 public static class SourceSnippetReader
 {
@@ -19,6 +19,29 @@ public static class SourceSnippetReader
             return null;
 
         var solutionRoot = ResolveSolutionRoot(options.SolutionPath);
+        if (solutionRoot is null)
+        {
+            // Without a solution root we refuse absolute hints (prevents arbitrary file read).
+            if (!string.IsNullOrWhiteSpace(options.AbsolutePathHint)
+                && Path.IsPathRooted(options.AbsolutePathHint))
+            {
+                throw new InvalidOperationException(
+                    "Refusing to read absolute path without solution root (DNM-030 allowlist).");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(relativePath)
+            && solutionRoot is not null
+            && LooksLikePathTraversal(relativePath))
+        {
+            var probe = Path.GetFullPath(Path.Combine(
+                solutionRoot,
+                relativePath.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar)));
+            if (!IsUnderRoot(probe, solutionRoot))
+                throw new InvalidOperationException(
+                    $"Refusing path traversal outside solution root: {relativePath}");
+        }
+
         var absolute = ResolveAbsolutePath(relativePath, options.AbsolutePathHint, solutionRoot);
         if (absolute is null || !File.Exists(absolute))
             return null;
@@ -64,6 +87,11 @@ public static class SourceSnippetReader
             context);
     }
 
+    /// <summary>True when the path string uses parent-directory segments.</summary>
+    public static bool LooksLikePathTraversal(string path) =>
+        path.Contains("..", StringComparison.Ordinal)
+        || path.Contains("%2e%2e", StringComparison.OrdinalIgnoreCase);
+
     public static string? ResolveSolutionRoot(string? solutionPath)
     {
         if (string.IsNullOrWhiteSpace(solutionPath))
@@ -92,26 +120,28 @@ public static class SourceSnippetReader
         if (string.IsNullOrWhiteSpace(relativePath) || string.IsNullOrWhiteSpace(solutionRoot))
             return null;
 
-        var combined = Path.GetFullPath(Path.Combine(solutionRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        // Normalize and reject empty / rooted relative segments that would ignore root
+        var rel = relativePath.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relativePath))
+        {
+            var rooted = Path.GetFullPath(relativePath);
+            return File.Exists(rooted) ? rooted : null;
+        }
+
+        var combined = Path.GetFullPath(Path.Combine(solutionRoot, rel));
         return File.Exists(combined) ? combined : null;
     }
 
     public static bool IsUnderRoot(string absolutePath, string root)
     {
-        var fullFile = Path.GetFullPath(absolutePath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
+        var fullFile = Path.GetFullPath(absolutePath);
         var fullRoot = Path.GetFullPath(root)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        return fullFile.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(
-                   Path.GetFullPath(absolutePath),
-                   Path.GetFullPath(root),
-                   StringComparison.OrdinalIgnoreCase)
-               || Path.GetFullPath(absolutePath)
-                   .StartsWith(Path.GetFullPath(root) + Path.DirectorySeparatorChar,
-                       StringComparison.OrdinalIgnoreCase);
+        if (string.Equals(fullFile, fullRoot, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var prefix = fullRoot + Path.DirectorySeparatorChar;
+        return fullFile.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -26,7 +26,7 @@ It is a **structure + light-deps** index with optional deep relations on demand.
 - [x] MCP server stdio (PR-5)
 - [x] Incremental (`--changed-only`) + `dotnet tool` pack (PR-6)
 
-See [docs/MVP_CHECKLIST.md](docs/MVP_CHECKLIST.md), [docs/DECISIONS.md](docs/DECISIONS.md), [docs/AGENT_PLAYBOOK.md](docs/AGENT_PLAYBOOK.md) (agent refactor workflows), and [docs/BACKLOG.md](docs/BACKLOG.md).
+See [docs/MVP_CHECKLIST.md](docs/MVP_CHECKLIST.md), [docs/DECISIONS.md](docs/DECISIONS.md), [docs/AGENT_PLAYBOOK.md](docs/AGENT_PLAYBOOK.md) (agent refactor workflows), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), [docs/RELEASE.md](docs/RELEASE.md), and [docs/BACKLOG.md](docs/BACKLOG.md).
 
 ## Quickstart
 

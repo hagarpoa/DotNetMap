@@ -1,20 +1,34 @@
-# DotNetMap 0.2.0 — Release notes
+# DotNetMap 0.3.4 — Release notes
 
 ## What it is
 
 Local-first, AI-token-aware semantic map of a .NET solution:
 
-- **CLI** for index / query / export / consumers  
+- **CLI** for index / query / export / impact / hotspots / doctor  
 - **MCP** stdio server for agents  
-- **SQLite** persistence with FTS5  
+- **SQLite** persistence with FTS5, optional body FTS, normalized `edges`  
 
-## Install (local tool)
+## Versioning
+
+Semantic versioning on the **tool package** `DotNetMap.Tool`:
+
+| Version | Highlights |
+|---------|------------|
+| 0.3.4 | DNM-017 generated code policy |
+| 0.3.3 | DNM-014 edges + DNM-016 partials |
+| 0.3.2 | DNM-013 body FTS |
+| 0.3.1 | DNM-026/027 config + golden export |
+| 0.3.0 | AI cycle: MCP impact tools, snippets, staleness… |
+| 0.2.0 | Core CLI/MCP map |
+
+## Install (local pack — always works)
 
 ```powershell
-cd C:\Users\Cesar\source\repos\NetMap
+cd C:\Projects\AI\NetMap
 dotnet pack src/DotNetMap.Cli/DotNetMap.Cli.csproj -c Release -o artifacts
-dotnet tool uninstall -g DotNetMap.Tool  # if reinstalling
-dotnet tool install -g DotNetMap.Tool --add-source artifacts --version 0.2.0
+dotnet tool uninstall -g DotNetMap.Tool   # if reinstalling
+dotnet tool install -g DotNetMap.Tool --add-source artifacts --version 0.3.4
+dotnetmap --version
 dotnetmap --help
 ```
 
@@ -24,48 +38,52 @@ Or run without installing:
 dotnet run --project src/DotNetMap.Cli -- --help
 ```
 
+## Install from nuget.org (DNM-031)
+
+When the package is published to nuget.org:
+
+```powershell
+dotnet tool install -g DotNetMap.Tool
+# or update:
+dotnet tool update -g DotNetMap.Tool
+```
+
+### Maintainer publish checklist
+
+1. Bump `Version` / `PackageVersion` in `src/DotNetMap.Cli/DotNetMap.Cli.csproj` and `Directory.Build.props`.  
+2. `dotnet test` green.  
+3. `dotnet pack src/DotNetMap.Cli/DotNetMap.Cli.csproj -c Release -o artifacts`  
+4. `dotnet nuget push artifacts/DotNetMap.Tool.<version>.nupkg --api-key $NUGET_API_KEY --source https://api.nuget.org/v3/index.json`  
+5. Tag git: `v0.3.4`  
+
+Until step 4 is done, document **local pack** (above) as the supported install path.
+
 ## Quickstart
 
 ```powershell
 dotnetmap index path/to/solution.slnx --db .dotnetmap/index.db
 dotnetmap status --db .dotnetmap/index.db
+dotnetmap doctor --db .dotnetmap/index.db
 dotnetmap query OrderService --db .dotnetmap/index.db
 dotnetmap get OrderService --db .dotnetmap/index.db
-dotnetmap export --members --out map.md --db .dotnetmap/index.db
-
-# Incremental (project-level)
-dotnetmap index path/to/solution.slnx --db .dotnetmap/index.db --changed-only
-
-# Scoped consumers (SymbolFinder)
-dotnetmap consumers type:IOrderService --db .dotnetmap/index.db
-
-# MCP stdio
+dotnetmap impact IOrderService --db .dotnetmap/index.db
 dotnetmap serve-mcp --db .dotnetmap/index.db
 ```
 
-## Incremental semantics
+Optional:
 
-- Fingerprint = hash(csproj) + sorted hashes of source files (excluding bin/obj/generated/migrations).  
-- If **any** file in a project changes → **entire project** is reindexed.  
-- Requires same solution path and same `--include-private` / `--include-test` flags.  
-- Default index is **full**; pass `--changed-only` for reuse.  
+```powershell
+dotnetmap index path --index-body --include-generated --changed-only
+dotnetmap query TODO --body
+```
 
-## Included in 0.2.0 (product name DotNetMap)
+## Troubleshooting
 
-- Method lines / lineCount / file  
-- Outbound method **calls** on index  
-- On-demand **callers** (`dotnetmap callers`)  
-- Incremental project-level reindex  
-- MCP tools including `get_method`  
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for MSBuild, restore, global.json, and snippet path security.
 
-## Not in 0.2.0
+## Planned work
 
-- Method-level incremental (file/project only)  
-- Materialized full call graph by default  
-- Embeddings / TOON  
-- Cross-language support  
-
-Planned work: [BACKLOG.md](BACKLOG.md) (DNM-001+).
+[BACKLOG.md](BACKLOG.md) — remaining path to 1.0: multi-TFM, NuGet.org publish, sample surface, Linux smoke.
 
 ## Compatibility
 

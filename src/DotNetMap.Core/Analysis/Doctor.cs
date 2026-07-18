@@ -31,25 +31,42 @@ public static class Doctor
             true,
             $".NET {Environment.Version} ({System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription})"));
 
-        // MSBuild
+        // MSBuild (DNM-024)
         try
         {
             WorkspaceLoader.EnsureMsBuildRegistered();
             var instances = MSBuildLocator.QueryVisualStudioInstances().ToList();
             var registered = MSBuildLocator.IsRegistered;
+            var pathHint = WorkspaceLoader.RegisteredMsBuildPath;
+            var detail = registered
+                ? $"MSBuild registered ({instances.Count} VS instance(s) visible)"
+                  + (pathHint is null ? "" : $"; path={pathHint}")
+                : instances.Count > 0
+                    ? $"{instances.Count} MSBuild instance(s) found"
+                    : "No MSBuild/VS instance found — install .NET SDK / Visual Studio Build Tools. See docs/TROUBLESHOOTING.md";
             report.Checks.Add(new Check(
                 "msbuild",
                 registered || instances.Count > 0,
-                registered
-                    ? $"MSBuild registered ({instances.Count} instance(s) visible)"
-                    : instances.Count > 0
-                        ? $"{instances.Count} MSBuild instance(s) found"
-                        : "No MSBuild/VS instance found — install .NET SDK / Visual Studio Build Tools",
+                detail,
                 "error"));
+
+            // global.json near cwd (warn only)
+            var gjson = Path.Combine(Directory.GetCurrentDirectory(), "global.json");
+            if (File.Exists(gjson))
+            {
+                report.Checks.Add(new Check(
+                    "global_json",
+                    true,
+                    $"Found {gjson} — ensure pinned SDK is installed (dotnet --list-sdks)",
+                    "info"));
+            }
         }
         catch (Exception ex)
         {
-            report.Checks.Add(new Check("msbuild", false, ex.Message));
+            report.Checks.Add(new Check(
+                "msbuild",
+                false,
+                ex.Message + " | " + WorkspaceLoader.MsBuildTroubleshootingHint()));
         }
 
         // DB

@@ -67,6 +67,63 @@ public class SourceSnippetTests
     }
 
     [Fact]
+    public void TryRead_RejectsRelativeTraversal()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"root-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var outsideDir = Path.Combine(Path.GetTempPath(), $"out-dir-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outsideDir);
+        var secret = Path.Combine(outsideDir, "secret.cs");
+        File.WriteAllText(secret, "secret\n");
+        try
+        {
+            // .. from root toward sibling outsideDir
+            var rel = Path.GetRelativePath(root, secret).Replace('\\', '/');
+            Assert.True(SourceSnippetReader.LooksLikePathTraversal(rel) || rel.StartsWith("..", StringComparison.Ordinal));
+            Assert.Throws<InvalidOperationException>(() =>
+                SourceSnippetReader.TryRead(
+                    rel,
+                    1,
+                    1,
+                    new SourceSnippetOptions { SolutionPath = root }));
+        }
+        finally
+        {
+            try { File.Delete(secret); } catch { /* ignore */ }
+            try { Directory.Delete(outsideDir, true); } catch { /* ignore */ }
+            try { Directory.Delete(root, true); } catch { /* ignore */ }
+        }
+    }
+
+    [Fact]
+    public void TryRead_RejectsAbsoluteWithoutSolutionRoot()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), $"abs-{Guid.NewGuid():N}.cs");
+        File.WriteAllText(outside, "x\n");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                SourceSnippetReader.TryRead(
+                    null,
+                    1,
+                    1,
+                    new SourceSnippetOptions { AbsolutePathHint = outside, SolutionPath = null }));
+        }
+        finally
+        {
+            try { File.Delete(outside); } catch { /* ignore */ }
+        }
+    }
+
+    [Fact]
+    public void OutputLimits_HardCapsClamp()
+    {
+        Assert.Equal(OutputLimits.HardMaxSearchHits, OutputLimits.ClampSearchHits(9999));
+        Assert.Equal(OutputLimits.HardMaxMembers, OutputLimits.ClampMembers(9999));
+        Assert.Equal(OutputLimits.HardMaxSnippetChars, OutputLimits.ClampSnippetChars(99_000));
+    }
+
+    [Fact]
     public async Task Get_WithSnippet_IncludesSourceBody()
     {
         var demo = FindDemo();

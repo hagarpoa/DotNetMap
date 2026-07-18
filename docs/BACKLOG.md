@@ -1,8 +1,8 @@
 # DotNetMap — Backlog de melhorias
 
-**Estado base:** v0.3.0  
+**Estado base:** v0.3.4  
 **Objetivo do produto:** índice local, AI-token-aware, de solutions .NET para agentes (refatoração, impacto, navegação).  
-**Última revisão:** 2026-07-18 (DNM-014 edges / schema v1)  
+**Última revisão:** 2026-07-18 (1.0 hardening: DNM-024/030/031 docs)  
 
 ---
 
@@ -420,7 +420,7 @@
 
 ---
 
-### DNM-024 — Hardening MSBuildWorkspace (CI/máquinas reais)
+### DNM-024 — Hardening MSBuildWorkspace (CI/máquinas reais) ✅ (0.3.5)
 | | |
 |--|--|
 | **Pri** | P1 (para 1.0) |
@@ -428,8 +428,12 @@
 | **Esforço** | L |
 | **Depende** | — |
 
-**Solução:** mensagens claras para SDK missing, restore needed, global.json; log de WorkspaceFailed filtrado.  
-**Done when:** doc de troubleshooting; exit codes estáveis.
+- [x] `WorkspaceLoader.FormatOpenFailure` (SDK / restore / global.json hints)
+- [x] Filtro de diagnostics ruidosos (ex. MSB3277)
+- [x] `doctor` detalha path MSBuild + global.json
+- [x] `docs/TROUBLESHOOTING.md`
+
+**Done when:** doc de troubleshooting; exit codes estáveis. ✅ (doc + msgs; exit codes já parciais)
 
 ---
 
@@ -502,7 +506,7 @@
 
 ---
 
-### DNM-030 — Segurança: path allowlist e max results em MCP
+### DNM-030 — Segurança: path allowlist e max results em MCP ✅ (0.3.5)
 | | |
 |--|--|
 | **Pri** | P1 (para 1.0) |
@@ -510,14 +514,17 @@
 | **Esforço** | S–M |
 | **Depende** | DNM-004 |
 
-**Solução:** snippet só lê paths dentro da solution root; caps obrigatórios.  
-**Done when:** tentativa de path traversal falha com erro claro.
+- [x] Snippet allowlist solution root; rejeita `..` / absolute sem root
+- [x] `OutputLimits` hard caps; MCP tools clamp max/search/snippet/impact
+- [x] Testes de path traversal
+
+**Done when:** tentativa de path traversal falha com erro claro. ✅
 
 ---
 
 ## P1 — Release 1.0 (produto)
 
-### DNM-031 — Publicação NuGet / versionamento semântico
+### DNM-031 — Publicação NuGet / versionamento semântico ✅ parcial (0.3.5)
 | | |
 |--|--|
 | **Pri** | P1 |
@@ -525,7 +532,11 @@
 | **Esforço** | M |
 | **Depende** | — |
 
-**Done when:** `dotnet tool install -g DotNetMap.Tool` do nuget.org (ou feed privado documentado); changelog.
+- [x] Pack local documentado (`RELEASE.md`); version 0.3.4 alinhada
+- [x] Checklist de publish nuget.org no RELEASE
+- [ ] Pacote publicado em nuget.org (requer API key do maintainer)
+
+**Done when:** `dotnet tool install -g DotNetMap.Tool` do nuget.org (ou feed privado documentado); changelog. (local pack ✅)
 
 ---
 
@@ -680,48 +691,39 @@
 
 ## Mapa: necessidade de refatoração → itens
 
-| Necessidade do modelo | Status 0.2 | Backlog |
-|----------------------|------------|---------|
+| Necessidade do modelo | Status 0.3.5 | Backlog restante |
+|----------------------|--------------|------------------|
 | Overview solution | OK | — |
-| Buscar por nome | OK | DNM-013 body ✅ |
-| Definição type/method + lines | OK | DNM-004 (snippet), DNM-016 (partials) |
-| Calls outbound | OK | DNM-007 (filtro BCL) |
-| Callers method | CLI only | DNM-001, DNM-005 |
-| Consumers type | CLI only | DNM-002 |
-| Implementations | Parcial | DNM-003 |
-| Overrides | Não | DNM-011 |
-| Field/prop refs | Parcial | DNM-012 |
-| Impact multi-hop | Não | DNM-015 |
+| Buscar por nome | OK | — |
+| Definição type/method + lines + partials | OK | — |
+| Calls outbound + filtro BCL | OK | — |
+| Callers / consumers / implementations / overrides | OK (MCP+CLI) | — |
+| Impact multi-hop + edges SQL | OK | — |
+| Body search | OK (`--index-body`) | — |
+| Índice stale / doctor / quality | OK | — |
+| Generated code policy | OK | — |
 | Testes relacionados | Não | DNM-019 |
 | Dead code | Não | DNM-020 |
-| Índice stale | Fraco | DNM-009 |
-| Body search | Não | DNM-013 |
-| Monorepo robusto | Parcial | DNM-018, DNM-024, DNM-029 |
+| Multi-TFM / monorepo | Parcial | DNM-018, DNM-021, DNM-029 |
+| NuGet.org | Pack local OK | DNM-031 publish |
 
 ---
 
 ## Sprint 0.3 sugerido (ordem de PRs)
 
-1. **DNM-006 + DNM-007** ✅ — saída compacta + filtro BCL  
-2. **DNM-001 + DNM-002** ✅ — MCP callers/consumers  
-3. **DNM-004** ✅ — snippets  
-4. **DNM-005** ✅ — call sites com linha  
-5. **DNM-008 + DNM-010** ✅ — prompts + playbook  
-6. **DNM-009** ✅ — status stale  
-
-**Sprint 0.3: completo.**
+**Sprint 0.3–0.3.4: completo** (incl. body FTS, edges, partials, generated).
 
 ---
 
 ## Critérios de “pronto para 1.0” (produto)
 
-- [ ] Agente MCP faz impact analysis **sem** CLI extra (DNM-001/002/004)  
-- [ ] Respostas default cabem em ~12k chars por tool (DNM-006)  
-- [ ] `doctor` + troubleshooting MSBuild (DNM-034/024)  
-- [ ] Tool instalável com versão limpa (já) e feed documentado (DNM-031)  
-- [ ] Sample + testes cobrem language surface principal (DNM-025/026)  
-- [ ] Snippets seguros (DNM-030)  
-- [ ] Playbook de refatoração publicado (DNM-010)  
+- [x] Agente MCP faz impact analysis **sem** CLI extra (DNM-001/002/004/015)  
+- [x] Respostas default cabem em ~12k chars por tool (DNM-006)  
+- [x] `doctor` + troubleshooting MSBuild (DNM-034/024)  
+- [ ] Tool instalável do **nuget.org** (pack local OK — DNM-031 publish)  
+- [ ] Sample + testes cobrem language surface principal (DNM-025; DNM-026 ✅)  
+- [x] Snippets seguros + caps MCP (DNM-030)  
+- [x] Playbook de refatoração publicado (DNM-010)  
 
 ---
 

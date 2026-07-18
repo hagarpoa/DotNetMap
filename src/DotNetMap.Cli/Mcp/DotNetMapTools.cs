@@ -79,7 +79,7 @@ public static class DotNetMapTools
         [Description("Max types (default 80, max 200)")] int maxTypes = 80,
         [Description("compact (default) or full")] string detail = "compact")
     {
-        maxTypes = Math.Clamp(maxTypes, 1, 200);
+        maxTypes = OutputLimits.ClampMembers(maxTypes, @default: 80);
         using var store = OpenOrThrow();
         return CompactExporter.ToMarkdown(store, new ExportOptions
         {
@@ -103,7 +103,7 @@ public static class DotNetMapTools
         [Description("compact or full")] string detail = "compact",
         [Description("Search indexed source bodies (DNM-013); needs index --index-body")] bool body = false)
     {
-        max = Math.Clamp(max, 1, OutputLimits.DefaultMaxSearchHits);
+        max = OutputLimits.ClampSearchHits(max);
         kind = string.IsNullOrWhiteSpace(kind) ? "all" : kind.ToLowerInvariant();
         if (kind is not ("all" or "type" or "member"))
             kind = "all";
@@ -133,7 +133,7 @@ public static class DotNetMapTools
         [Description("Include source snippet from disk")] bool includeSnippet = false,
         [Description("Context lines around span when includeSnippet")] int contextLines = 0)
     {
-        maxMembers = Math.Clamp(maxMembers, 1, 200);
+        maxMembers = OutputLimits.ClampMembers(maxMembers);
         using var store = OpenOrThrow();
         var typeDetail = store.GetTypeDetail(name, maxMembers);
         if (typeDetail is null)
@@ -207,7 +207,7 @@ public static class DotNetMapTools
                 SolutionPath = status.SolutionPath,
                 AbsolutePathHint = store.ResolveFileAbsolutePath(rel),
                 ContextLines = contextLines,
-                MaxChars = Math.Clamp(maxChars, 200, 50_000)
+                MaxChars = OutputLimits.ClampSnippetChars(maxChars)
             });
 
             if (snip is null)
@@ -234,9 +234,10 @@ public static class DotNetMapTools
             Detail = ParseDetail(detail),
             MaxChars = OutputLimits.DefaultMaxChars,
             MaxRelations = OutputLimits.DefaultMaxRelations,
-            MaxMembersPerType = maxMembers,
+            MaxMembersPerType = OutputLimits.ClampMembers(maxMembers),
             IncludeSnippet = includeSnippet,
             SnippetContextLines = Math.Clamp(contextLines, 0, 20),
+            SnippetMaxChars = OutputLimits.HardMaxSnippetChars,
             SolutionPath = store.GetStatus().SolutionPath,
             ResolveAbsolutePath = store.ResolveFileAbsolutePath
         };
@@ -253,7 +254,7 @@ public static class DotNetMapTools
         [Description("compact or full")] string detail = "compact",
         CancellationToken cancellationToken = default)
     {
-        max = Math.Clamp(max, 1, 100);
+        max = Math.Clamp(max, 1, OutputLimits.HardMaxCallers);
         try
         {
             using var store = OpenOrThrow();
@@ -279,7 +280,7 @@ public static class DotNetMapTools
         [Description("compact or full")] string detail = "compact",
         CancellationToken cancellationToken = default)
     {
-        max = Math.Clamp(max, 1, 100);
+        max = Math.Clamp(max, 1, OutputLimits.HardMaxCallers);
         try
         {
             using var store = OpenOrThrow();
@@ -303,6 +304,7 @@ public static class DotNetMapTools
         [Description("md or json")] string format = "md",
         CancellationToken cancellationToken = default)
     {
+        max = Math.Clamp(max, 1, OutputLimits.HardMaxCallers);
         try
         {
             using var store = OpenOrThrow();
@@ -325,6 +327,7 @@ public static class DotNetMapTools
         [Description("md or json")] string format = "md",
         CancellationToken cancellationToken = default)
     {
+        max = Math.Clamp(max, 1, OutputLimits.HardMaxCallers);
         try
         {
             using var store = OpenOrThrow();
@@ -347,6 +350,7 @@ public static class DotNetMapTools
         [Description("Top N (default 15, max 50)")] int top = 15,
         [Description("md or json")] string format = "md")
     {
+        top = Math.Clamp(top, 1, 50);
         try
         {
             using var store = OpenOrThrow();
@@ -373,6 +377,8 @@ public static class DotNetMapTools
         [Description("md or json")] string format = "md",
         CancellationToken cancellationToken = default)
     {
+        depth = Math.Clamp(depth, 1, 4);
+        maxNodes = Math.Clamp(maxNodes, 5, OutputLimits.HardMaxImpactNodes);
         try
         {
             using var store = OpenOrThrow();
