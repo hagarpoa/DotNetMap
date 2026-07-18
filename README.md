@@ -1,6 +1,6 @@
 # DotNetMap
 
-**Local, AI-token-aware semantic map of a .NET solution** — CLI + MCP (soon).
+**Local, AI-token-aware semantic map of a .NET solution** — CLI + MCP (stdio).
 
 > Index Solution → Project → Namespace → Type → Members with source position, size, XML summary, and light dependencies. Built for agents that need precise context without blowing the token window.
 
@@ -24,7 +24,7 @@ It is a **structure + light-deps** index with optional deep relations on demand.
 - [x] Security allowlist, troubleshooting, CHANGELOG / SECURITY
 - [x] `dotnet tool` pack (`DotNetMap.Tool`)
 
-See [docs/MVP_CHECKLIST.md](docs/MVP_CHECKLIST.md), [docs/DECISIONS.md](docs/DECISIONS.md), [docs/AGENT_PLAYBOOK.md](docs/AGENT_PLAYBOOK.md) (agent refactor workflows), [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), [docs/RELEASE.md](docs/RELEASE.md), and [docs/BACKLOG.md](docs/BACKLOG.md).
+**Docs:** [MCP_FOR_AGENTS.md](docs/MCP_FOR_AGENTS.md) (paste into AI context) · [AGENT_PLAYBOOK.md](docs/AGENT_PLAYBOOK.md) · [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · [RELEASE.md](docs/RELEASE.md) · [DECISIONS.md](docs/DECISIONS.md) · [BACKLOG.md](docs/BACKLOG.md) · [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md)
 
 ## Quickstart
 
@@ -43,12 +43,12 @@ dotnetmap get Money --db .dotnetmap/index.db
 
 ```text
 DotNetMap/
-  schema/v0.sql          # SQLite schema (embedded in Core)
-  docs/                  # Decisions, MVP checklist
-  src/DotNetMap.Core        # Domain + Store + (soon) Roslyn
-  src/DotNetMap.Cli         # System.CommandLine entry
+  schema/v0.sql             # SQLite schema (embedded; edges + FTS)
+  docs/                     # Agent MCP guide, playbook, release, backlog
+  src/DotNetMap.Core        # Domain, Store, Roslyn extraction, analysis
+  src/DotNetMap.Cli         # CLI + MCP server (dotnetmap)
   tests/DotNetMap.Tests
-  samples/DemoSolution   # Small multi-project sample
+  samples/DemoSolution      # Language surface + multi-TFM sample
 ```
 
 
@@ -127,6 +127,23 @@ dotnetmap callers CalculateTotal --db .dotnetmap/index.db
 
 ### MCP (stdio)
 
+Full agent reference: **[docs/MCP_FOR_AGENTS.md](docs/MCP_FOR_AGENTS.md)** (catalog, workflows, system-prompt snippet).
+
+**Installed tool:**
+
+```json
+{
+  "mcpServers": {
+    "dotnetmap": {
+      "command": "dotnetmap",
+      "args": ["serve-mcp", "--db", "C:/path/to/repo/.dotnetmap/index.db"]
+    }
+  }
+}
+```
+
+**From source:**
+
 ```json
 {
   "mcpServers": {
@@ -138,9 +155,11 @@ dotnetmap callers CalculateTotal --db .dotnetmap/index.db
 }
 ```
 
-Tools: `get_status` (+ quality), `doctor`, `get_overview`, `search`, `get_type`, `get_method`, `get_snippet`, `get_callers`, `get_consumers`, `find_implementations`, `find_overrides`, `get_impact`, `get_hotspots`  
-Resources: `solution://overview`, `type://{name}`  
-Prompts: `architecture_review`, `impact_analysis`, `refactor_plan`
+| Kind | Names |
+|------|--------|
+| **Tools** | `get_status`, `doctor`, `get_overview`, `search`, `get_type`, `get_method`, `get_snippet`, `get_callers`, `get_consumers`, `find_implementations`, `find_overrides`, `get_impact`, `get_hotspots` |
+| **Resources** | `solution://overview`, `type://{name}`, `method://{name}` |
+| **Prompts** | `architecture_review`, `impact_analysis`, `refactor_plan` |
 
 ### Exit codes
 
@@ -156,11 +175,11 @@ Prompts: `architecture_review`, `impact_analysis`, `refactor_plan`
 
 ```powershell
 dotnet pack src/DotNetMap.Cli/DotNetMap.Cli.csproj -c Release -o artifacts
-dotnet tool install -g DotNetMap.Tool --add-source ./artifacts --version 0.3.0
+dotnet tool install -g DotNetMap.Tool --add-source ./artifacts --version 1.0.0
 dotnetmap index ./MySolution --db .dotnetmap/index.db
 ```
 
-See [docs/RELEASE.md](docs/RELEASE.md) for notes and incremental semantics.
+See [docs/RELEASE.md](docs/RELEASE.md) for install notes, exit codes, and multi-TFM/Linux tips.
 
 ## License
 

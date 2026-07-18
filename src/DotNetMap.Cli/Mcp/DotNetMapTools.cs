@@ -48,6 +48,7 @@ public static class DotNetMapTools
             s.TokenEstimateOverview,
             s.IncludePrivate,
             s.IncludeTest,
+            includeGenerated = s.IncludeGenerated,
             indexBody = s.IndexBody,
             bodyFileCount = s.BodyFileCount,
             edgeCount = s.EdgeCount,

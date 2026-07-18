@@ -4,6 +4,9 @@ How an AI agent should use DotNetMap to refactor .NET code with low tokens and a
 
 **Requires:** indexed DB (`.dotnetmap/index.db`) and MCP `serve-mcp` or CLI.
 
+> **Full MCP catalog for AI context:** [MCP_FOR_AGENTS.md](MCP_FOR_AGENTS.md)  
+> Paste that file into the agent’s system/context when configuring DotNetMap MCP.
+
 ---
 
 ## Golden rules

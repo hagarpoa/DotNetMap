@@ -26,7 +26,7 @@ public static class McpHost
                 options.ServerInfo = new()
                 {
                     Name = "dotnetmap",
-                    Version = "0.3.0"
+                    Version = "1.0.0"
                 };
             })
             .WithStdioServerTransport()

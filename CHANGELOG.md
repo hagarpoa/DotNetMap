@@ -12,6 +12,8 @@ All notable changes to **DotNetMap** are documented here.
 - MCP resource `method://{name}` — DNM-039  
 - `docs/TROUBLESHOOTING.md`, `SECURITY.md`, release checklist — DNM-024/030/040  
 - Linux/macOS smoke notes in troubleshooting — DNM-029  
+- **`docs/MCP_FOR_AGENTS.md`** — full MCP catalog + system-prompt snippet for AI hosts  
+- `docs/DOCUMENTATION.md` — documentation index / phase-1 completeness table
 
 ### Included from 0.3.x
 

@@ -5,7 +5,7 @@
 Local-first, AI-token-aware semantic map of a .NET solution:
 
 - **CLI** — index, query, get, impact, hotspots, doctor, export, serve-mcp  
-- **MCP** — stdio tools + resources (`solution://`, `type://`, `method://`)  
+- **MCP** — stdio tools + resources (`solution://`, `type://`, `method://`) — see [MCP_FOR_AGENTS.md](MCP_FOR_AGENTS.md)  
 - **SQLite** — FTS5, optional body FTS, normalized `edges`  
 
 ## Install (local pack)
